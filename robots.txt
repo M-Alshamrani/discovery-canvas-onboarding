@@ -1,0 +1,6 @@
+User-agent: *
+Disallow: /
+
+# Dell Discovery Canvas — internal presales tooling.
+# This robots.txt asks well-behaved crawlers (Google, Bing, Archive.org)
+# to skip every path. Not a security control; a politeness control.

@@ -1,0 +1,16 @@
+# Saved engagement files (user data — keep out of version control)
+*.canvas
+
+# OS junk
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*~
+
+# Logs
+*.log

@@ -1,0 +1,34 @@
+# Build-context exclusions for the Dell Discovery Canvas image.
+# Keep this in sync with the COPY whitelist in the Dockerfile.
+
+# VCS + IDE
+.git
+.gitignore
+.gitattributes
+.vscode
+.idea
+
+# Documentation (not served by the app)
+docs/
+CHANGELOG_PLAN.md
+SPEC.md
+README.md
+HOW_TO_RUN.md
+CLAUDE_CODE_TRANSFER_PROMPT.md
+
+# Reviewer-handoff scripts (host-only)
+start.sh
+start.bat
+
+# Container plumbing (don't bake itself into itself)
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# OneDrive + Windows + macOS noise
+desktop.ini
+Thumbs.db
+.DS_Store
+
+# Known stray folder from a failed brace-expansion in the OneDrive copy
+{core,state,services,interactions,ui

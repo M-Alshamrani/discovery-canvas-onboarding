@@ -1,0 +1,13 @@
+# Normalize line endings across the team: store text as LF, check out native.
+* text=auto
+
+# Scripts that run inside the Linux container must stay LF.
+*.sh text eol=lf
+# Windows batch files stay CRLF.
+*.bat text eol=crlf
+
+# Binary assets — never normalize.
+*.avif binary
+*.png  binary
+*.jpg  binary
+*.ico  binary

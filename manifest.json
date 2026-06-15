@@ -1,0 +1,26 @@
+{
+  "name": "Dell Discovery Canvas",
+  "short_name": "Canvas",
+  "description": "Dell Technologies presales workshop canvas — map current/desired state, identify gaps, build roadmap projects. Save workshops as .canvas files and re-open anywhere.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FFFFFF",
+  "theme_color": "#0078D4",
+  "icons": [
+    { "src": "/Logo/canvas-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ],
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "application/vnd.delltech.canvas+json": [".canvas"]
+      },
+      "icons": [
+        { "src": "/Logo/canvas-icon.svg", "sizes": "any", "type": "image/svg+xml" }
+      ]
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "orientation": "any"
+}

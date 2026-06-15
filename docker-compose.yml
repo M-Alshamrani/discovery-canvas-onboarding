@@ -1,0 +1,53 @@
+# Dell Discovery Canvas — single-service compose file.
+#
+# Localhost-only (default — no auth needed):
+#   docker compose up -d
+#   open http://localhost:8080
+#
+# LAN-exposed with Basic auth (v2.2.1+):
+#   AUTH_USERNAME=<your-username> AUTH_PASSWORD=<strong-password> \
+#     BIND_ADDR=0.0.0.0 docker compose up -d --build
+#   open http://<host-IP>:8080  (browser will prompt for username/password)
+#
+# WARNING: never set BIND_ADDR=0.0.0.0 without also setting AUTH_USERNAME +
+# AUTH_PASSWORD. The vLLM endpoints on this host (Code LLM :8000, VLM :8001)
+# are unauth'd; exposing this app without a credential gate alongside them
+# implies anyone on the LAN can reach the inference APIs.
+#
+# Override the host port if 8080 is taken (e.g. another service on the host):
+#   HOST_PORT=8888 docker compose up -d
+
+services:
+  dell-discovery-canvas:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: dell-discovery-canvas:latest
+    container_name: dell-discovery-canvas
+    restart: unless-stopped
+    ports:
+      # ${BIND_ADDR:-127.0.0.1} keeps it loopback-only by default.
+      - "${BIND_ADDR:-127.0.0.1}:${HOST_PORT:-8080}:80"
+    environment:
+      # Optional Basic auth — leave unset for no auth (localhost-only mode).
+      # Both must be set together to enable auth.
+      AUTH_USERNAME: "${AUTH_USERNAME:-}"
+      AUTH_PASSWORD: "${AUTH_PASSWORD:-}"
+      # LLM reverse-proxy upstream — host running the local vLLM.
+      # Default 'host.docker.internal' works on Docker Desktop AND on Linux
+      # Docker 20.10+ via the extra_hosts mapping below. Override with
+      # LLM_HOST=10.x.x.x for a remote vLLM. LLM_LOCAL_PORT defaults to 8000.
+      LLM_HOST:         "${LLM_HOST:-host.docker.internal}"
+      LLM_LOCAL_PORT:   "${LLM_LOCAL_PORT:-8000}"
+      # rc.4-dev hotfix2a (2026-05-04): Local B port for the second
+      # vLLM endpoint (per LLMs on GB10.docx — VLM on 8001 by default).
+      LLM_LOCAL_B_PORT: "${LLM_LOCAL_B_PORT:-8001}"
+    extra_hosts:
+      # Make host.docker.internal resolvable on Linux Docker (no-op on Mac/Windows).
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
