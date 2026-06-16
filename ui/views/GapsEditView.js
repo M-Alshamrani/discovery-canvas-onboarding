@@ -383,6 +383,12 @@ export function renderGapsEditView(left, right, session) {
     var gapTypes   = Array.from(activeGapTypes);
     var urgencies  = Array.from(activeUrgencies);
     var allLayers  = activeLayerIds.size === LAYERS.length;
+    // The shared environment filter can hold env UUIDs (selected on this
+    // tab) or env catalog ids (selected on another tab's filter bar). Map
+    // each visible env's UUID to its catalog id so a gap matches whichever
+    // id form is active, instead of the board silently rendering empty.
+    var envUuidToCat = {};
+    _v3VisibleEnvs().forEach(function(en) { envUuidToCat[en.uuid] = en.envCatalogId; });
     return (_v3GapsArray() || []).filter(function(g) {
       var layers = (g.affectedLayers && g.affectedLayers.length) ? g.affectedLayers : [g.layerId];
       var envs   = g.affectedEnvironments || [];
@@ -394,7 +400,7 @@ export function renderGapsEditView(left, right, session) {
       // affectedEnvironments are kept).
       var eOk = envIds.length === 0 ||
                 envs.length === 0 ||
-                envs.some(function(e) { return envIds.indexOf(e) >= 0; });
+                envs.some(function(e) { return envIds.indexOf(e) >= 0 || envIds.indexOf(envUuidToCat[e]) >= 0; });
       var gtOk = gapTypes.length === 0 ||
                  (g.gapType && gapTypes.indexOf(g.gapType) >= 0);
       var uOk  = urgencies.length === 0 ||

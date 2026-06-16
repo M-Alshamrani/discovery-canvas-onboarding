@@ -943,3 +943,12 @@ features:
   re-renders.
 - The app must ship at least two demo personas, each of which builds a
   schema-valid engagement.
+
+---
+
+## Known gaps between this spec and the current build
+
+This document describes how the app is *meant* to behave. Where the current build doesn't fully
+meet it yet, the deviations (with their fixes or workarounds) are tracked in
+[KNOWN_ISSUES.md](KNOWN_ISSUES.md) — read the two together. When you fix one of those issues, the
+matching behavior above is the contract to test against.
