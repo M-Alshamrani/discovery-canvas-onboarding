@@ -88,6 +88,12 @@ related checks enforce a single rule, the rule is stated once.
 - The app must keep working-only fields (such as the currently selected entity,
   secondary lookup indexes, and the integrity log) out of the saved file, and
   must rebuild the lookup indexes when a file is loaded.
+- The app must save and load the `.canvas` file in the engagement's own shape, with
+  no translation through an older format. Save validates the engagement before
+  writing; load validates it, rebuilds the lookup indexes, runs the integrity sweep,
+  and restores the skills library and provider settings. A file written by an older
+  app version is declined with a clear message rather than mangled, so links (such
+  as a gap's driver) always survive a save-then-reopen.
 - The schema must be read only at the three boundaries — load, save, and action
   commit — and must never be imported by the read-only selector layer.
 
@@ -568,6 +574,11 @@ related checks enforce a single rule, the rule is stated once.
 - The app must read AI configuration with sensible defaults when none is saved,
   round-trip saved settings, and migrate a deprecated model id to its replacement
   on load.
+- The app must let the user pick the model from a dropdown of known ids for the
+  proxy-backed providers (Anthropic, Gemini), with a "Custom…" option that reveals
+  a free-text field; the user-defined providers (local, Local B, Dell Sales Chat)
+  keep a plain free-text model field. A saved model that is not in the list must
+  not be lost — it is shown under "Custom…", pre-filled.
 - The app must treat the local provider as ready without a key, and require a key
   for public providers.
 - The app must build each provider's request in that provider's own shape

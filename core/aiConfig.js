@@ -56,10 +56,10 @@ export const DEFAULT_AI_CONFIG = {
       baseUrl:        "/api/llm/gemini",      // proxy path; not user-editable
       model:          "gemini-2.5-flash",     // gemini-2.0-flash deprecated to new users (2026-Q1)
       apiKey:         "",
-      // gemini-2.5-flash is the most-used (= most-overloaded) model. The
-      // fallback chain prefers still-fast models before dropping to the
-      // stable 1.5 family.
-      fallbackModels: ["gemini-2.0-flash", "gemini-1.5-flash"]
+      // The previous default fallback chain (gemini-2.0-flash, gemini-1.5-flash)
+      // is dropped: both are deprecated. Empty means single-model mode; the
+      // user can add a fallback chain in Settings if their key serves more.
+      fallbackModels: []
     },
     dellSalesChat: {
       label:          "Dell Sales Chat",
@@ -98,7 +98,10 @@ export function saveAiConfig(config) {
 // user's key + endpoint are preserved; only the model string shifts to the
 // supported replacement.
 var DEPRECATED_MODELS = {
-  gemini: { "gemini-2.0-flash": "gemini-2.5-flash" }   // deprecated to new users 2026-Q1
+  gemini: {
+    "gemini-2.0-flash": "gemini-2.5-flash",
+    "gemini-1.5-flash": "gemini-2.5-flash"
+  }
 };
 
 function mergeWithDefaults(stored) {

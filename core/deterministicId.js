@@ -1,16 +1,21 @@
-// Deterministic id generation. The migrator must be idempotent: running
-// it twice on the same input must produce byte-identical output, which
-// requires deterministic ids rather than random UUIDs.
+// core/deterministicId.js — deterministic id generation.
 //
-// Algorithm: FNV-1a 32-bit hash, computed 4 times with different seeds,
-// concatenated into a 128-bit value carved into UUID v8 (custom) shape:
+// Generates a stable id from a (kind, ...inputs) tuple: the same inputs
+// always produce the same id. Dependency-free and synchronous. Used where a
+// record needs a repeatable id (for example a saved skill) so re-running the
+// same operation does not mint a brand-new id each time.
+//
+// The output shape must stay stable: records already saved carry ids minted
+// by this exact algorithm, so changing it would orphan them.
+//
+// Algorithm: an FNV-1a 32-bit hash computed four times with different seeds,
+// concatenated into a 128-bit value carved into a UUID v8 (custom) shape:
 //
 //   xxxxxxxx-xxxx-8xxx-xxxx-xxxxxxxxxxxx
 //                ^ version 8 marker (custom)
 //
-// FNV-1a's 128-bit composite is collision-safe at this scale (well under
-// 500 instances). Fully synchronous, no Web Crypto dependency, works in
-// any environment.
+// FNV-1a is enough at this scale; the 128-bit composite is collision-safe
+// well past the number of ids the app mints. No Web Crypto dependency.
 
 const FNV_OFFSET = 0x811c9dc5;
 const FNV_PRIME  = 0x01000193;

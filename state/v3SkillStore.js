@@ -16,7 +16,7 @@
 //   2. Return raw map (no migration; current shape only)
 
 import { SkillSchema } from "../schema/skill.js";
-import { generateDeterministicId } from "../migrations/helpers/deterministicId.js";
+import { generateDeterministicId } from "../core/deterministicId.js";
 
 const STORAGE_KEY = "v3_saved_skills_v1";
 

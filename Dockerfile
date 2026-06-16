@@ -31,17 +31,13 @@ COPY index.html robots.txt styles.css app.js manifest.json /usr/share/nginx/html
 COPY core/         /usr/share/nginx/html/core/
 COPY state/        /usr/share/nginx/html/state/
 COPY services/     /usr/share/nginx/html/services/
-COPY interactions/ /usr/share/nginx/html/interactions/
 COPY ui/           /usr/share/nginx/html/ui/
-COPY diagnostics/  /usr/share/nginx/html/diagnostics/
 COPY Logo/         /usr/share/nginx/html/Logo/
 # v3.0 additions:
 COPY schema/       /usr/share/nginx/html/schema/
 COPY vendor/       /usr/share/nginx/html/vendor/
 COPY catalogs/     /usr/share/nginx/html/catalogs/
 COPY selectors/    /usr/share/nginx/html/selectors/
-COPY migrations/   /usr/share/nginx/html/migrations/
-COPY tests/        /usr/share/nginx/html/tests/
 
 # nginx:alpine already EXPOSEs 80 and runs as root for low ports; keep defaults.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

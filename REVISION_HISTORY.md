@@ -31,6 +31,11 @@ On top of v3, the AI features were added in turn:
 - The assistant answers in a natural voice and can give clearly-marked "beyond the canvas"
   outside analysis.
 - The AI Notes window has draggable dividers and is resizable.
+- File save and load are fully v3-native: the engagement is written and read in its own shape, so a
+  saved-then-reopened `.canvas` keeps every link (a file from an older app version is politely
+  declined). Earlier builds round-tripped through an older shape and could drop the driver link.
+- The Settings panel picks the AI model from a dropdown per provider, with a "Custom…" option for
+  self-hosted endpoints; stale default fallback models were removed.
 
 ---
 

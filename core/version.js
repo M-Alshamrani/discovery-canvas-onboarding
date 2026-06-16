@@ -14,9 +14,10 @@
 // the same change that creates the tag.
 //
 // Distinct from:
-//   - engagement schemaVersion — the engagement-schema migrator version.
-//     It has nothing to do with which build of the app is running.
+//   - engagement schemaVersion — the schema-version tag carried on each
+//     saved engagement. It has nothing to do with which build of the app
+//     is running.
 //   - git tags — runtime code doesn't read git; this string is the
 //     runtime-visible version.
 
-export const APP_VERSION = "3.0.0-rc.11-dev";
+export const APP_VERSION = "3.1.0-dev";

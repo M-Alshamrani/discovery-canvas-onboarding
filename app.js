@@ -1,7 +1,6 @@
 // app.js -- main router. Wires the topbar, stepper, footer actions, and
 // keyboard shortcuts, and renders the active tab against the engagement store.
 
-import { engagementToV2Session } from "./state/legacySessionAdapter.js";
 import { createEmptyEngagement } from "./schema/engagement.js";
 import { clearTranscript } from "./state/chatMemory.js";
 import { openSettingsModal }         from "./ui/views/SettingsModal.js";
@@ -19,7 +18,7 @@ import "./state/filterState.js";
 import { confirmAction, notifyError, notifyInfo, notifySuccess } from "./ui/components/Notify.js";
 // Import data modal (Dell internal LLM workflow).
 import { openImportDataModal } from "./ui/components/ImportDataModal.js";
-import { buildSaveEnvelope, parseFileEnvelope, applyEnvelope, suggestFilename, FILE_MIME } from "./services/sessionFile.js";
+import { buildSaveEnvelope, parseFileEnvelope, loadCanvas, suggestFilename, FILE_MIME } from "./services/canvasFile.js";
 import { renderContextView }         from "./ui/views/ContextView.js";
 import { renderMatrixView }          from "./ui/views/MatrixView.js";
 import { renderGapsEditView }        from "./ui/views/GapsEditView.js";
@@ -721,21 +720,23 @@ function wireFooter() {
     document.getElementById("saveDialogCancel").addEventListener("click", function() { overlay.remove(); });
     document.getElementById("saveDialogOk").addEventListener("click", function() {
       var includeApiKeys = document.getElementById("saveInclKeysChk").checked;
-      // The .canvas file format is the legacy session shape, so derive it
-      // from the engagement at the file boundary via engagementToV2Session().
-      // services/sessionFile.js owns that boundary.
-      var v2sessForSave = engagementToV2Session(getActiveEngagement());
-      var envelope = buildSaveEnvelope({
-        session:        v2sessForSave,
+      // Save the engagement in its native shape, bundled with the skills
+      // library and provider settings. The engagement is validated here; on
+      // failure we surface the reason rather than write an invalid file.
+      var result = buildSaveEnvelope(getActiveEngagement(), {
         skills:         loadSkills(),
         providerConfig: loadAiConfig(),
         includeApiKeys: includeApiKeys
       });
-      var blob = new Blob([JSON.stringify(envelope, null, 2)], { type: FILE_MIME });
+      if (!result.ok) {
+        notifyError({ title: "Couldn't save", body: (result.errors || ["The session could not be validated."]).join(" ") });
+        return;
+      }
+      var blob = new Blob([JSON.stringify(result.envelope, null, 2)], { type: FILE_MIME });
       var url  = URL.createObjectURL(blob);
       var a    = document.createElement("a");
       a.href = url;
-      a.download = suggestFilename(v2sessForSave);
+      a.download = suggestFilename(getActiveEngagement());
       document.body.appendChild(a); a.click(); a.remove();
       URL.revokeObjectURL(url);
       overlay.remove();
@@ -760,22 +761,26 @@ function wireFooter() {
 
       var hasKeys = env.providerKeys && Object.keys(env.providerKeys).length > 0;
       function continueOpen(applyKeys) {
-        var res;
-        try { res = applyEnvelope(env, { applyApiKeys: applyKeys }); }
-        catch (e) {
-          notifyError({ title: "Can't apply this file", body: e.message || String(e) });
-          return;
-        }
-        // applyEnvelope returns an engagement directly; the file-format
-        // translation is encapsulated in sessionFile.js, so this code does
-        // not need to know the on-disk format.
-        setActiveEngagement(res.engagement);
-        saveSkills(res.skills);
-        if (res.providerConfig) saveAiConfig(res.providerConfig);
-        var body = "Saved by Canvas v" + res.savedAppVersion +
-          (res.savedAt ? " at " + res.savedAt : "");
-        if (res.warnings.length) body += " · " + res.warnings.length + " note" + (res.warnings.length === 1 ? "" : "s");
-        notifySuccess({ title: "Opened " + (file.name || "file"), body: body });
+        // Load the engagement in its native shape (validated against the
+        // schema). Files from an older app version are rejected with a clear
+        // message rather than silently mangled.
+        loadCanvas(env, { applyApiKeys: applyKeys }).then(function(res) {
+          if (!res.ok) {
+            if (res.error && res.error.code === "FILE_FROM_PREVIOUS_VERSION") {
+              notifyError({ title: "This file is from a previous version", body: "It was saved by an older build of Canvas and can't be opened here. Start a fresh session." });
+            } else {
+              notifyError({ title: "Can't open this file", body: (res.error && res.error.message) || "The file could not be loaded." });
+            }
+            return;
+          }
+          setActiveEngagement(res.engagement);
+          saveSkills(res.skills);
+          if (res.providerConfig) saveAiConfig(res.providerConfig);
+          var body = "Saved by Canvas v" + res.savedAppVersion +
+            (res.savedAt ? " at " + res.savedAt : "");
+          if (res.warnings && res.warnings.length) body += " · " + res.warnings.length + " note" + (res.warnings.length === 1 ? "" : "s");
+          notifySuccess({ title: "Opened " + (file.name || "file"), body: body });
+        });
       }
       if (hasKeys) {
         confirmAction({

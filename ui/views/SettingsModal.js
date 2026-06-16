@@ -9,7 +9,7 @@
 // skillBuilderOpener.js.
 
 import { loadAiConfig, saveAiConfig, PROVIDERS } from "../../core/aiConfig.js";
-import { testConnection } from "../../services/aiService.js";
+import { testConnection, listModels } from "../../services/aiService.js";
 import { renderSkillBuilder } from "./SkillBuilder.js";
 import { openOverlay, closeOverlay } from "../components/Overlay.js";
 
@@ -150,6 +150,76 @@ function injectSectionPills(activeSection) {
   slot.appendChild(seg);
 }
 
+// Sentinel value for the "Custom…" option in the model dropdown.
+var CUSTOM_MODEL_SENTINEL = "__custom__";
+
+// buildModelControl(providerKey, currentModel, hint) -> { el, value() }.
+// When the provider has a known model list (anthropic, gemini), the Model
+// field is a <select> of those ids plus a "Custom…" option that reveals a
+// free-text input. Otherwise (local, Local B, Dell Sales Chat) it is just the
+// free-text input. A saved model not in the list is never lost: "Custom…" is
+// selected and the text input is shown, pre-filled with it. value() returns
+// the chosen model id (trimmed).
+function buildModelControl(providerKey, currentModel, hint) {
+  var models = listModels(providerKey);
+  var el = document.createElement("div");
+  el.className = "settings-model-control";
+
+  var customInput = document.createElement("input");
+  customInput.type = "text";
+  customInput.className = "settings-input";
+  customInput.setAttribute("data-model-custom", "1");
+  if (hint && hint.modelPlaceholder) customInput.placeholder = hint.modelPlaceholder;
+
+  // Free-text providers: the input is the whole control.
+  if (models.length === 0) {
+    customInput.value = currentModel || "";
+    el.appendChild(customInput);
+    return { el: el, value: function() { return customInput.value.trim(); } };
+  }
+
+  // Known-list providers: a <select> plus a Custom… escape.
+  var select = document.createElement("select");
+  select.className = "settings-input";
+  select.setAttribute("data-model-select", "1");
+  models.forEach(function(m) {
+    var opt = document.createElement("option");
+    opt.value = m;
+    opt.textContent = m;
+    select.appendChild(opt);
+  });
+  var customOpt = document.createElement("option");
+  customOpt.value = CUSTOM_MODEL_SENTINEL;
+  customOpt.textContent = "Custom…";
+  select.appendChild(customOpt);
+
+  function syncCustomVisibility() {
+    customInput.style.display = (select.value === CUSTOM_MODEL_SENTINEL) ? "" : "none";
+  }
+  if (models.indexOf(currentModel) >= 0) {
+    select.value = currentModel;
+    customInput.value = "";
+  } else {
+    // A custom or older saved value — keep it so it is never lost.
+    select.value = CUSTOM_MODEL_SENTINEL;
+    customInput.value = currentModel || "";
+  }
+  syncCustomVisibility();
+  select.addEventListener("change", function() {
+    syncCustomVisibility();
+    if (select.value === CUSTOM_MODEL_SENTINEL) customInput.focus();
+  });
+
+  el.appendChild(select);
+  el.appendChild(customInput);
+  return {
+    el: el,
+    value: function() {
+      return select.value === CUSTOM_MODEL_SENTINEL ? customInput.value.trim() : select.value;
+    }
+  };
+}
+
 function buildSettingsBody(section) {
   var body = document.createElement("div");
   body.className = "settings-body settings-body-" + section;
@@ -180,13 +250,13 @@ function buildSettingsBody(section) {
       // Before switching providers, commit any in-progress edits on the
       // CURRENT provider form to the config object. Without this, typed-
       // but-not-saved input values would be discarded when swapSection
-      // rebuilds the form for the new provider. urlInput / modelInput /
+      // rebuilds the form for the new provider. urlInput / modelControl /
       // fbInput / keyInput are var-hoisted in buildSettingsBody; at click
       // time they exist and reflect the live DOM.
       try {
         if (urlInput && config.providers[activeKey]) {
           config.providers[activeKey].baseUrl        = urlInput.value.trim();
-          config.providers[activeKey].model          = modelInput.value.trim();
+          config.providers[activeKey].model          = modelControl.value();
           config.providers[activeKey].apiKey         = keyInput.value;
           config.providers[activeKey].fallbackModels = parseFallbackModels(fbInput.value);
         }
@@ -224,13 +294,11 @@ function buildSettingsBody(section) {
   urlGroup.appendChild(urlInput);
   form.appendChild(urlGroup);
 
-  // Model
+  // Model — a dropdown of known ids + a Custom… escape for anthropic/gemini,
+  // or a free-text input for the user-defined providers.
   var modelGroup = mkField("Model");
-  var modelInput = mk("input", "settings-input");
-  modelInput.type = "text";
-  modelInput.value = active.model;
-  if (hint.modelPlaceholder) modelInput.placeholder = hint.modelPlaceholder;
-  modelGroup.appendChild(modelInput);
+  var modelControl = buildModelControl(activeKey, active.model, hint);
+  modelGroup.appendChild(modelControl.el);
   form.appendChild(modelGroup);
 
   // Fallback chain
@@ -270,13 +338,13 @@ function buildSettingsBody(section) {
     var result = await testConnection({
       providerKey:    activeKey,
       baseUrl:        urlInput.value.trim(),
-      model:          modelInput.value.trim(),
+      model:          modelControl.value(),
       fallbackModels: parseFallbackModels(fbInput.value),
       apiKey:         keyInput.value
     });
     if (result.ok) {
       probeOut.className = "settings-probe-out ok";
-      var usedNote = result.modelUsed && result.modelUsed !== modelInput.value.trim()
+      var usedNote = result.modelUsed && result.modelUsed !== modelControl.value()
         ? " (fell back to " + result.modelUsed + ")" : "";
       probeOut.innerHTML =
         '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" ' +
@@ -295,7 +363,7 @@ function buildSettingsBody(section) {
   body.appendChild(probeRow);
 
   // Stash refs on the body so the footer's Save handler can read them.
-  body._settings = { config: config, activeKey: activeKey, urlInput: urlInput, modelInput: modelInput, fbInput: fbInput, keyInput: keyInput };
+  body._settings = { config: config, activeKey: activeKey, urlInput: urlInput, modelControl: modelControl, fbInput: fbInput, keyInput: keyInput };
 
   return body;
 }
@@ -367,7 +435,7 @@ function buildSettingsFooter(section) {
       // Read current input values from the live DOM (not a stale closure-
       // captured object) for robustness across swap timing.
       refs.config.providers[refs.activeKey].baseUrl        = refs.urlInput.value.trim();
-      refs.config.providers[refs.activeKey].model          = refs.modelInput.value.trim();
+      refs.config.providers[refs.activeKey].model          = refs.modelControl.value();
       refs.config.providers[refs.activeKey].apiKey         = refs.keyInput.value;
       refs.config.providers[refs.activeKey].fallbackModels = parseFallbackModels(refs.fbInput.value);
       saveAiConfig(refs.config);

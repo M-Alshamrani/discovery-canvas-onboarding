@@ -34,6 +34,23 @@ export var RETRY_BASE_DELAY_MS = 500;    // first backoff; doubles each attempt
 export var RETRY_CAP_DELAY_MS  = 4000;   // hard ceiling per wait
 export var RETRIABLE_STATUSES  = [429, 500, 502, 503, 504];
 
+// Curated model lists for the Settings model dropdown. Only the proxy-backed
+// providers whose model set is known are listed here; the model string is
+// still passed to the provider as-is, so this is a convenience, not a gate.
+// Providers with user-defined endpoints (local, Local B, Dell Sales Chat) are
+// absent, so listModels() returns [] and their Model field stays free-text.
+var BLESSED_MODELS = {
+  anthropic: ["claude-opus-4-8", "claude-sonnet-4-6", "claude-haiku-4-5", "claude-fable-5"],
+  gemini:    ["gemini-2.5-flash", "gemini-2.5-pro"]
+};
+
+// listModels(providerId) -> string[] (a fresh copy each call; [] for free-text
+// providers). The Settings model dropdown is built from this.
+export function listModels(providerId) {
+  var list = BLESSED_MODELS[providerId];
+  return Array.isArray(list) ? list.slice() : [];
+}
+
 // Public API — single entry point.
 //   chatCompletion({
 //     providerKey:    "local" | "anthropic" | "gemini",

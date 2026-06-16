@@ -130,11 +130,13 @@ The full set of links, at a glance:
 | gap | `relatedCurrent/DesiredInstanceIds[]` | instances |
 | gap | `services[]` | SERVICE_TYPES catalog |
 
-> **This is exactly what causes the "unknown driver" you may see on a saved-then-reopened file.**
-> When a session is saved in the older v2 file format and migrated back, the `businessDriverId` FK
-> link doesn't survive the translation cleanly — so the label join fails and the UI falls back to
-> "(unknown driver)". The data is there; the *link* was lost. The real fix is to save and load
-> natively in v3, with no lossy translation in the middle.
+> **This FK link is why a saved-then-reopened file used to show "(unknown driver)" — and why it no
+> longer does.** Earlier, a file was written and read through an older session shape, and the
+> `businessDriverId` FK link did not survive that translation cleanly, so the label join failed and
+> the UI fell back to "(unknown driver)". File save and load are now fully **v3-native**
+> (`services/canvasFile.js`): the engagement is written and read in its own shape, with no lossy
+> translation in the middle, so the link survives and labels resolve. A file written by an older app
+> version is politely declined ("start a fresh session") rather than mangled.
 
 ---
 
