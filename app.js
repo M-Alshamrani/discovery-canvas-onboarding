@@ -20,7 +20,7 @@ import { confirmAction, notifyError, notifyInfo, notifySuccess } from "./ui/comp
 import { openImportDataModal } from "./ui/components/ImportDataModal.js";
 import { buildSaveEnvelope, parseFileEnvelope, loadCanvas, suggestFilename, FILE_MIME } from "./services/canvasFile.js";
 import { renderContextView }         from "./ui/views/ContextView.js";
-import { renderMatrixView }          from "./ui/views/MatrixView.js";
+import { renderMatrixView, stopCurrentStateCountdownTimer } from "./ui/views/MatrixView.js";
 import { renderGapsEditView }        from "./ui/views/GapsEditView.js";
 import { renderReportingOverview }   from "./ui/views/ReportingView.js";
 import { renderSummaryHealthView }   from "./ui/views/SummaryHealthView.js";
@@ -548,6 +548,7 @@ function renderStage() {
   var left  = document.getElementById("main-left");
   var right = document.getElementById("main-right");
   if (!left || !right) return;
+  stopCurrentStateCountdownTimer();
   left.innerHTML  = "";
   right.innerHTML = "";
 

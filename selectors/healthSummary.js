@@ -14,7 +14,7 @@
 
 import { memoizeOne } from "../services/memoizeOne.js";
 
-const LAYER_ORDER = ["workload", "compute", "storage", "dataProtection", "virtualization", "infrastructure"];
+const LAYER_ORDER = ["workload", "compute", "virtualization", "storage", "dataProtection", "infrastructure"];
 
 function compute(engagement) {
   // Hidden envs are excluded from counts (consistent with selectMatrixView default).

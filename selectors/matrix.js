@@ -20,7 +20,7 @@ import { memoizeOne } from "../services/memoizeOne.js";
 // dataProtection, virtualization, infrastructure). The ids are hardcoded
 // here rather than read from the catalog because the six layers are
 // fixed — the catalog is the source of truth for labels, this is the order.
-const LAYER_ORDER = ["workload", "compute", "storage", "dataProtection", "virtualization", "infrastructure"];
+const LAYER_ORDER = ["workload", "compute", "virtualization", "storage", "dataProtection", "infrastructure"];
 
 function emptyVendorMix() {
   return { dell: 0, nonDell: 0, custom: 0 };

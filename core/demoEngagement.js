@@ -337,6 +337,10 @@ function buildDemoEngagement() {
     vendorGroup:   "nonDell",
     criticality:   "High",
     disposition:   "replace",
+    endOfSaleDate:        "2027-01-31",
+    endOfSupportDate:     "2027-12-31",
+    endOfServiceLifeDate: "2028-12-31",
+    nodeCount:            12,
     notes:         "Hosts EHR clustered nodes + clinical analytics. End-of-life Q1 2027 per HPE roadmap. Replace with PowerEdge R770."
   });
   const instHpeDR = createEmptyInstance({
@@ -349,6 +353,10 @@ function buildDemoEngagement() {
     vendorGroup:   "nonDell",
     criticality:   "High",
     disposition:   "replace",
+    endOfSaleDate:        "2027-03-31",
+    endOfSupportDate:     "2028-03-31",
+    endOfServiceLifeDate: "2029-03-31",
+    nodeCount:            8,
     notes:         "DR EHR cluster. Replace alongside Main DC nodes with PowerEdge R770 to standardize platform."
   });
   const instCiscoUCS = createEmptyInstance({
@@ -387,6 +395,10 @@ function buildDemoEngagement() {
     vendorGroup:   "nonDell",
     criticality:   "High",
     disposition:   "replace",
+    endOfSaleDate:        "2026-12-31",
+    endOfSupportDate:     "2027-12-31",
+    endOfServiceLifeDate: "2028-12-31",
+    nodeCount:            6,
     notes:         "Tier-1 storage for EHR + PACS. End-of-support 2027. Replace with PowerStore 1200T for higher density + native dedup."
   });
   const instNetAppDR = createEmptyInstance({
@@ -399,6 +411,10 @@ function buildDemoEngagement() {
     vendorGroup:   "nonDell",
     criticality:   "High",
     disposition:   "replace",
+    endOfSaleDate:        "2027-06-30",
+    endOfSupportDate:     "2028-06-30",
+    endOfServiceLifeDate: "2029-06-30",
+    nodeCount:            4,
     notes:         "DR replication target for EHR + PACS. Replace with PowerStore 1200T DR pair for protocol consistency."
   });
   const instPure = createEmptyInstance({
@@ -411,6 +427,10 @@ function buildDemoEngagement() {
     vendorGroup:   "nonDell",
     criticality:   "Medium",
     disposition:   "replace",
+    endOfSaleDate:        "2027-02-28",
+    endOfSupportDate:     "2028-02-28",
+    endOfServiceLifeDate: "2029-02-28",
+    nodeCount:            10,
     notes:         "Analytics warehouse. Off-budget renewal next year; replace with PowerScale F210 to absorb AI training data growth in the same tier."
   });
 
@@ -451,6 +471,10 @@ function buildDemoEngagement() {
     vendorGroup:   "nonDell",
     criticality:   "High",
     disposition:   "replace",
+    endOfSaleDate:        "2027-09-30",
+    endOfSupportDate:     "2028-09-30",
+    endOfServiceLifeDate: "2029-09-30",
+    nodeCount:            3,
     notes:         "Backup of EHR, PACS, Analytics. Tape rotation manual; no immutable copy. Cyber gap. Replace with PowerProtect DD9410 + Cyber Recovery Vault."
   });
 

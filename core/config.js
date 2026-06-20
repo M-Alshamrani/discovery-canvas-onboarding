@@ -6,9 +6,9 @@
 export const LAYERS = [
   { id: "workload",       label: "Workloads & Business Apps" },
   { id: "compute",        label: "Compute" },
+  { id: "virtualization",  label: "Virtualization & Hypervisors" },
   { id: "storage",        label: "Data Storage" },
   { id: "dataProtection", label: "Data Protection & Recovery" },
-  { id: "virtualization", label: "Virtualization & Hypervisors" },
   { id: "infrastructure", label: "Infrastructure Services" }
 ];
 

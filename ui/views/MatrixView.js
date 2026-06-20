@@ -41,15 +41,26 @@ import {
 // Indexed by stateFilter so the current (Tab 2) and desired (Tab 3) views
 // keep independent selections.
 var _selectedInstIdByState = { current: null, desired: null };
+var _currentStateCountdownTimer = null;
+
+export function stopCurrentStateCountdownTimer() {
+  if (_currentStateCountdownTimer) {
+    clearInterval(_currentStateCountdownTimer);
+    _currentStateCountdownTimer = null;
+  }
+}
 
 export function renderMatrixView(left, right, _legacySession, opts) {
   // _legacySession is ignored -- kept in the signature so existing
   // callers don't break. Every read resolves against getActiveEngagement().
   var stateFilter    = (opts && opts.stateFilter) || "current";
+  var isCurrentState = stateFilter === "current";
   // Accessors over the module-scope selection for the active stateFilter.
   function getSelectedInstId() { return _selectedInstIdByState[stateFilter] || null; }
   function setSelectedInstId(id) { _selectedInstIdByState[stateFilter] = id || null; }
   var selectedInstId = getSelectedInstId();
+
+  stopCurrentStateCountdownTimer();
 
   // Demo banner -- the engagement carries isDemo on engagement.meta.
   var bootEng = getActiveEngagement();
@@ -154,6 +165,13 @@ export function renderMatrixView(left, right, _legacySession, opts) {
 
   wrap.appendChild(grid);
   left.appendChild(wrap);
+
+  if (isCurrentState) {
+    refreshCountdownCells();
+    _currentStateCountdownTimer = setInterval(function() {
+      refreshCountdownCells();
+    }, 60000);
+  }
 
   // Restore the right-pane detail panel if a selection persisted across
   // the re-mount. If there's a persisted selectedInstId AND the instance
@@ -319,6 +337,10 @@ export function renderMatrixView(left, right, _legacySession, opts) {
       var badge = mk("span", "disposition-badge badge-" + inst.disposition);
       badge.textContent = da ? da.label : inst.disposition;
       tile.appendChild(badge);
+    }
+    if (isCurrentState) {
+      var lifecycleSummary = buildLifecycleSummary(inst);
+      if (lifecycleSummary) tile.appendChild(lifecycleSummary);
     }
     if (stateFilter === "desired" && inst.priority && !inst.disposition) {
       var pb = mk("span", "priority-badge priority-" + inst.priority.toLowerCase());
@@ -660,9 +682,17 @@ export function renderMatrixView(left, right, _legacySession, opts) {
     }
 
     var form = mk("div", "edit-form");
+    var supportsLifecycleFields = isCurrentState && (inst.layerId === "compute" || inst.layerId === "storage" || inst.layerId === "dataProtection");
 
     if (stateFilter === "current") {
       form.appendChild(fg("Criticality", selEl("criticality", ["","Low","Medium","High"], inst.criticality || "")));
+      if (supportsLifecycleFields) {
+        form.appendChild(mkSep("Lifecycle data (demo)"));
+        form.appendChild(buildOptionalDateField("End of Sale", "endOfSaleDate", inst.endOfSaleDate));
+        form.appendChild(buildOptionalDateField("End of Support", "endOfSupportDate", inst.endOfSupportDate));
+        form.appendChild(buildOptionalDateField("End of Service Life", "endOfServiceLifeDate", inst.endOfServiceLifeDate));
+        form.appendChild(buildOptionalNumberField("Number of nodes", "nodeCount", inst.nodeCount));
+      }
     } else {
       var dispOpts = [""].concat(DISPOSITION_ACTIONS.map(function(a) { return a.id; }));
       var dispLabels = {};
@@ -699,11 +729,18 @@ export function renderMatrixView(left, right, _legacySession, opts) {
         // priority/disposition. Map empty-string to null for nullable
         // fields; pass others through.
         var prop = el.getAttribute("data-prop");
+        var nullToggle = form.querySelector("[data-null-toggle='" + prop + "']");
+        if (nullToggle && nullToggle.value === "unknown") {
+          patch[prop] = null;
+          return;
+        }
         if ((prop === "priority" || prop === "disposition") && (v === "" || v === undefined)) {
           patch[prop] = null;
         } else if (prop === "criticality" && (v === "" || v === undefined)) {
           // criticality is required-non-null in schema; coerce empty to "Low" default.
           patch[prop] = "Low";
+        } else if (prop === "nodeCount") {
+          patch[prop] = (v === "" || v === undefined) ? null : Number(v);
         } else {
           patch[prop] = v;
         }
@@ -1019,6 +1056,117 @@ export function renderMatrixView(left, right, _legacySession, opts) {
       banner.textContent = "All " + totals.current + " current items reviewed in desired state.";
     }
     container.appendChild(banner);
+  }
+
+  function refreshCountdownCells() {
+    if (!isCurrentState) return;
+    activeEnvs.forEach(function(env) {
+      ["compute", "storage", "dataProtection"].forEach(function(layerId) {
+        refreshCell(layerId, env.uuid);
+      });
+    });
+  }
+
+  function buildLifecycleSummary(inst) {
+    var chips = [];
+    addLifecycleBadge(chips, "Sale", inst.endOfSaleDate, "endOfSaleDate");
+    addLifecycleBadge(chips, "Support", inst.endOfSupportDate, "endOfSupportDate");
+    addLifecycleBadge(chips, "Life", inst.endOfServiceLifeDate, "endOfServiceLifeDate");
+    if (inst.nodeCount !== null && inst.nodeCount !== undefined) {
+      chips.push(mkt("span", "tile-life-chip tile-life-chip-nodes", "Nodes " + inst.nodeCount));
+    }
+    if (!chips.length) return null;
+    var wrap = mk("div", "tile-life-summary");
+    chips.forEach(function(chip) { wrap.appendChild(chip); });
+    return wrap;
+  }
+
+  function addLifecycleBadge(chips, label, dateValue, prop) {
+    if (!dateValue) return;
+    var badge = mk("span", "tile-life-chip tile-life-chip-date");
+    badge.setAttribute("data-lifecycle-prop", prop);
+    badge.title = label + " date: " + dateValue;
+    badge.textContent = label + " " + formatCountdown(dateValue);
+    chips.push(badge);
+  }
+
+  function buildOptionalDateField(labelText, prop, value) {
+    var group = mk("div", "form-group lifecycle-field");
+    group.appendChild(mkt("label", "form-label", labelText));
+
+    var row = mk("div", "lifecycle-input-row");
+    var toggle = mk("select", "form-select lifecycle-toggle");
+    toggle.setAttribute("data-null-toggle", prop);
+    [{ value: "unknown", label: "Unknown" }, { value: "known", label: "Set date" }].forEach(function(optDef) {
+      var opt = document.createElement("option");
+      opt.value = optDef.value;
+      opt.textContent = optDef.label;
+      if ((value && optDef.value === "known") || (!value && optDef.value === "unknown")) opt.selected = true;
+      toggle.appendChild(opt);
+    });
+
+    var input = mk("input", "form-input lifecycle-date-input");
+    input.type = "date";
+    input.setAttribute("data-prop", prop);
+    input.value = value || "";
+    input.disabled = !value;
+
+    toggle.addEventListener("change", function() {
+      var unknown = toggle.value === "unknown";
+      input.disabled = unknown;
+      if (unknown) input.value = "";
+      else if (!input.value) input.focus();
+    });
+
+    row.appendChild(toggle);
+    row.appendChild(input);
+    group.appendChild(row);
+    return group;
+  }
+
+  function buildOptionalNumberField(labelText, prop, value) {
+    var group = mk("div", "form-group lifecycle-field");
+    group.appendChild(mkt("label", "form-label", labelText));
+
+    var row = mk("div", "lifecycle-input-row");
+    var toggle = mk("select", "form-select lifecycle-toggle");
+    toggle.setAttribute("data-null-toggle", prop);
+    [{ value: "unknown", label: "Unknown" }, { value: "known", label: "Set value" }].forEach(function(optDef) {
+      var opt = document.createElement("option");
+      opt.value = optDef.value;
+      opt.textContent = optDef.label;
+      if ((value !== null && value !== undefined && optDef.value === "known") || (value === null || value === undefined) && optDef.value === "unknown") opt.selected = true;
+      toggle.appendChild(opt);
+    });
+
+    var input = mk("input", "form-input lifecycle-number-input");
+    input.type = "number";
+    input.min = "0";
+    input.step = "1";
+    input.setAttribute("data-prop", prop);
+    input.value = (value === null || value === undefined) ? "" : String(value);
+    input.disabled = (value === null || value === undefined);
+
+    toggle.addEventListener("change", function() {
+      var unknown = toggle.value === "unknown";
+      input.disabled = unknown;
+      if (unknown) input.value = "";
+      else if (!input.value) input.focus();
+    });
+
+    row.appendChild(toggle);
+    row.appendChild(input);
+    group.appendChild(row);
+    return group;
+  }
+
+  function formatCountdown(dateValue) {
+    var target = new Date(dateValue + "T00:00:00");
+    if (isNaN(target.getTime())) return dateValue;
+    var diffDays = Math.round((target.getTime() - Date.now()) / 86400000);
+    if (diffDays === 0) return "today";
+    if (diffDays > 0) return diffDays + "d";
+    return "-" + Math.abs(diffDays) + "d";
   }
 }
 
