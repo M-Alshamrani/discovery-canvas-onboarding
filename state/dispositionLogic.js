@@ -22,8 +22,9 @@ import {
   ACTION_TO_GAP_TYPE  as TAXONOMY_ACTION_MAP
 } from "../core/taxonomy.js";
 import { commitAction } from "./engagementStore.js";
-import { updateGap } from "./collections/gapActions.js";
+import { addGap, updateGap } from "./collections/gapActions.js";
 import { updateInstance } from "./collections/instanceActions.js";
+import { computeLifecycleRisk } from "../services/healthMetrics.js";
 
 // Re-export for view consumers — single source of truth lives in
 // core/taxonomy.js.
@@ -312,5 +313,87 @@ export function confirmPhaseOnLink(engagement, gapId, desiredInstanceId) {
     desiredLabel:    des.label,
     gapPhase:        gap.phase
   };
+}
+
+// ─── lifecycle-risk gap sync ──────────────────────────────────────────
+
+// Marker prefix on auto-drafted lifecycle gaps. Distinguishes them from
+// disposition-drafted gaps (which always carry a relatedDesiredInstanceIds
+// link) so syncLifecycleGapAction can find "its" gap for a given current
+// instance without a dedicated schema field.
+const LIFECYCLE_GAP_PREFIX = "Lifecycle risk: ";
+
+function findLifecycleGap(engagement, currentInstanceId) {
+  for (const gapId of engagement.gaps.allIds) {
+    const g = engagement.gaps.byId[gapId];
+    if (g.origin === "autoDraft" &&
+        Array.isArray(g.relatedCurrentInstanceIds) && g.relatedCurrentInstanceIds.indexOf(currentInstanceId) >= 0 &&
+        (!g.relatedDesiredInstanceIds || g.relatedDesiredInstanceIds.length === 0) &&
+        typeof g.description === "string" && g.description.indexOf(LIFECYCLE_GAP_PREFIX) === 0) {
+      return g;
+    }
+  }
+  return null;
+}
+
+function lifecycleGapDescription(inst, risk) {
+  const dateSuffix = risk.days !== null
+    ? " (" + Math.abs(risk.days) + "d " + (risk.days < 0 ? "ago" : "out") + ")"
+    : "";
+  return LIFECYCLE_GAP_PREFIX + inst.label + " is " + risk.reason + dateSuffix;
+}
+
+// syncLifecycleGapAction · after a current instance's lifecycle dates
+// are saved, auto-draft (or update) a gap when the asset is past or
+// nearing end-of-support / end-of-service-life, and auto-close that gap
+// (recoverable, not deleted — mirrors syncGapFromDesiredAction's "keep"
+// behaviour) once the risk clears (date removed or pushed out).
+// urgencyOverride is respected, same as the criticality sync above.
+export function syncLifecycleGapAction(engagement, currentInstanceId) {
+  const inst = engagement.instances.byId[currentInstanceId];
+  if (!inst || inst.state !== "current") return { ok: true, engagement };
+
+  const risk     = computeLifecycleRisk(inst);
+  const existing = findLifecycleGap(engagement, currentInstanceId);
+
+  if (risk.severity === "none") {
+    if (existing && existing.status !== "closed") {
+      return updateGap(engagement, existing.id, { status: "closed" });
+    }
+    return { ok: true, engagement };
+  }
+
+  const urgency = risk.severity === "elevated" ? "Medium" : "High";
+  const phase   = risk.severity === "elevated" ? "next"   : "now";
+  const description = lifecycleGapDescription(inst, risk);
+
+  if (existing) {
+    const patch = { description, phase };
+    if (existing.status === "closed") patch.status = "open";
+    if (existing.urgencyOverride !== true) patch.urgency = urgency;
+    return updateGap(engagement, existing.id, patch);
+  }
+
+  const result = addGap(engagement, {
+    description,
+    layerId:                   inst.layerId,
+    affectedLayers:            [inst.layerId],
+    affectedEnvironments:      inst.environmentId ? [inst.environmentId] : [],
+    gapType:                   "replace",
+    urgency,
+    phase,
+    notes:                     "Auto-detected from lifecycle dates entered on " + inst.label + " (Tab 1).",
+    relatedCurrentInstanceIds: [inst.id],
+    relatedDesiredInstanceIds: [],
+    status:                    "open",
+    reviewed:                  false,
+    origin:                    "autoDraft"
+  });
+  if (!result.ok) return result;
+  return { ...result, lifecycleGapCreated: true };
+}
+
+export function commitSyncLifecycleGap(currentInstanceId) {
+  return commitAction(syncLifecycleGapAction, currentInstanceId);
 }
 

@@ -23,7 +23,8 @@ import {
   getDesiredCounterpart, getCurrentSource, buildGapFromDisposition,
   proposeCriticalityUpgrades,
   commitSyncGapFromDesired,
-  commitSyncGapsFromCurrentCriticality
+  commitSyncGapsFromCurrentCriticality,
+  commitSyncLifecycleGap
 } from "../../state/dispositionLogic.js";
 import { helpButton } from "./HelpModal.js";
 import { renderDemoBanner } from "../components/DemoBanner.js";
@@ -687,7 +688,7 @@ export function renderMatrixView(left, right, _legacySession, opts) {
     if (stateFilter === "current") {
       form.appendChild(fg("Criticality", selEl("criticality", ["","Low","Medium","High"], inst.criticality || "")));
       if (supportsLifecycleFields) {
-        form.appendChild(mkSep("Lifecycle data (demo)"));
+        form.appendChild(mkSep("Lifecycle data"));
         form.appendChild(buildOptionalDateField("End of Sale", "endOfSaleDate", inst.endOfSaleDate));
         form.appendChild(buildOptionalDateField("End of Support", "endOfSupportDate", inst.endOfSupportDate));
         form.appendChild(buildOptionalDateField("End of Service Life", "endOfServiceLifeDate", inst.endOfServiceLifeDate));
@@ -755,6 +756,12 @@ export function renderMatrixView(left, right, _legacySession, opts) {
         commitSyncGapFromDesired(inst.id);
       } else if (stateFilter === "current") {
         commitSyncGapsFromCurrentCriticality(inst.id);
+        if (supportsLifecycleFields) {
+          var lr = commitSyncLifecycleGap(inst.id);
+          if (lr && lr.lifecycleGapCreated) {
+            showToast("↳ Lifecycle risk gap drafted on Tab 4", "ok");
+          }
+        }
       }
       saveBtn.textContent = "Saved";
       setTimeout(function() {

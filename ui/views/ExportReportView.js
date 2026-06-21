@@ -7,7 +7,7 @@
 import { getEngagementAsSession, getVisibleEnvsFromEngagement } from "../../state/projection.js";
 import { LAYERS, BUSINESS_DRIVERS } from "../../core/config.js";
 import { buildProjects, computeDiscoveryCoverage, computeRiskPosture, generateSessionBrief } from "../../services/roadmapService.js";
-import { getHealthSummary, computeBucketMetrics, scoreToRiskLabel, scoreToClass } from "../../services/healthMetrics.js";
+import { getHealthSummary, computeBucketMetrics, scoreToRiskLabel, scoreToClass, computeLifecycleRisk } from "../../services/healthMetrics.js";
 import { renderDemoBanner } from "../components/DemoBanner.js";
 
 // ── Entry point ────────────────────────────────────────────────────────────────
@@ -187,7 +187,7 @@ function buildReportHTML(session, visibleEnvs) {
     buildEnvironmentsPanel(visibleEnvs, instances, gaps),
     buildAssetPanel(instances, visibleEnvs, totalCount, dellCount, nonDellCount),
     buildHeatmapPanel(heatmapRows, visibleEnvs),
-    buildRisksPanel(gaps, highGaps, medGaps, nowHigh, instances),
+    buildRisksPanel(gaps, highGaps, medGaps, nowHigh, instances, visibleEnvs),
     buildRoadmapPanel(projects, nowCount, nextCount, laterCount, drivers),
     buildBriefPanel(brief, coverage, risk, summary),
     buildScript(),
@@ -605,9 +605,12 @@ function buildHeatmapPanel(heatmapRows, visibleEnvs) {
 
 // ── Risks & Gaps panel ───────────────────────────────────────────────────
 
-function buildRisksPanel(gaps, highGaps, medGaps, nowHigh, instances) {
+function buildRisksPanel(gaps, highGaps, medGaps, nowHigh, instances, visibleEnvs) {
   // Risk cards
   var riskCards = buildRiskCards(gaps, highGaps, medGaps, instances);
+
+  // Lifecycle risk (end of sale / support / service life)
+  var lifecyclePanel = buildLifecycleRiskSection(instances, visibleEnvs);
 
   // Data quality gaps
   var dqGaps = buildDataQualityGaps(instances, gaps);
@@ -644,6 +647,7 @@ function buildRisksPanel(gaps, highGaps, medGaps, nowHigh, instances) {
     "<div id=\"prk\" class=\"rpt-pnl\">",
     "<div class=\"rpt-sh\">Confirmed Risks</div>",
     riskCards || "<div class=\"rpt-card rpt-empty\">No high-risk items identified.</div>",
+    lifecyclePanel,
     dqGaps.length > 0 ? [
       "<div class=\"rpt-sh\">Data Quality Gaps</div>",
       "<div class=\"rpt-card\">" + dqGaps.map(function(d) {
@@ -996,6 +1000,57 @@ function buildRiskCards(gaps, highGaps, medGaps, instances) {
   }
 
   return cards.join("");
+}
+
+// buildLifecycleRiskSection · table of current-state assets past or
+// nearing end-of-support / end-of-service-life, using the same
+// computeLifecycleRisk used to score the heatmap (buildHeatmapData) and
+// auto-draft gaps (state/dispositionLogic.js syncLifecycleGapAction), so
+// counts agree everywhere in the app.
+function buildLifecycleRiskSection(instances, visibleEnvs) {
+  var SEVERITY_RANK = { critical: 0, high: 1, elevated: 2 };
+  var rows = [];
+  instances.forEach(function(i) {
+    if (i.state !== "current") return;
+    var risk = computeLifecycleRisk(i);
+    if (risk.severity === "none") return;
+    rows.push({ instance: i, risk: risk });
+  });
+  if (rows.length === 0) return "";
+
+  rows.sort(function(a, b) { return SEVERITY_RANK[a.risk.severity] - SEVERITY_RANK[b.risk.severity]; });
+
+  var sevLabel = { critical: "Critical", high: "High", elevated: "Elevated" };
+  var sevCls   = { critical: "high", high: "high", elevated: "medium" };
+
+  var tableRows = rows.map(function(r) {
+    var i = r.instance, risk = r.risk;
+    var layer = LAYERS.find(function(l) { return l.id === i.layerId; });
+    var env   = visibleEnvs.find(function(e) { return e.id === i.environmentId; });
+    var dateNote = risk.days !== null ? (Math.abs(risk.days) + "d " + (risk.days < 0 ? "ago" : "out")) : "—";
+    return [
+      "<tr>",
+        "<td class=\"rpt-fw6\">" + esc(i.label || "(unnamed)") + "</td>",
+        "<td>" + esc(env ? env.label : "—") + "</td>",
+        "<td>" + esc(layer ? layer.label : i.layerId) + "</td>",
+        "<td><span class=\"rpt-urg rpt-urg-" + sevCls[risk.severity] + "\">" + esc(sevLabel[risk.severity]) + "</span></td>",
+        "<td>" + esc(risk.reason) + "</td>",
+        "<td>" + esc(dateNote) + "</td>",
+      "</tr>"
+    ].join("");
+  }).join("");
+
+  return [
+    "<div class=\"rpt-sh\">Lifecycle Risk</div>",
+    "<div class=\"rpt-tbl-wrap\">",
+      "<table class=\"rpt-at\">",
+        "<thead><tr>",
+          "<th>Asset</th><th>Environment</th><th>Layer</th><th>Risk</th><th>Status</th><th>Timing</th>",
+        "</tr></thead>",
+        "<tbody>" + tableRows + "</tbody>",
+      "</table>",
+    "</div>"
+  ].join("\n");
 }
 
 function buildDataQualityGaps(instances, gaps) {
