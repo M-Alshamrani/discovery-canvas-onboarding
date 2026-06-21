@@ -27,6 +27,7 @@ import { renderSummaryHealthView }   from "./ui/views/SummaryHealthView.js";
 import { renderSummaryGapsView }     from "./ui/views/SummaryGapsView.js";
 import { renderSummaryVendorView }   from "./ui/views/SummaryVendorView.js";
 import { renderSummaryRoadmapView }  from "./ui/views/SummaryRoadmapView.js";
+import { renderExportReportView }    from "./ui/views/ExportReportView.js";
 
 // Stepper steps render with a mono leading-zero pattern (01 Context,
 // 02 Current state, ...). The label is just the readable name;
@@ -44,11 +45,12 @@ var STEPS = [
 // tab: per-gap and per-project services info already lives on the gap drawer
 // body, the Roadmap project-card chip row, and the Tab 4 multi-chip selector.
 var REPORTING_TABS = [
-  { id: "overview", label: "Overview"   },
-  { id: "health",   label: "Heatmap"    },
-  { id: "gaps",     label: "Gaps board" },
-  { id: "vendor",   label: "Vendor mix" },
-  { id: "roadmap",  label: "Roadmap"    }
+  { id: "overview", label: "Overview"      },
+  { id: "health",   label: "Heatmap"       },
+  { id: "gaps",     label: "Gaps board"    },
+  { id: "vendor",   label: "Vendor mix"    },
+  { id: "roadmap",  label: "Roadmap"       },
+  { id: "export",   label: "Export report" }
 ];
 
 var currentStep         = "context";
@@ -596,6 +598,7 @@ function renderReportingTab(left, right) {
     case "gaps":     renderSummaryGapsView(left, right);    break;
     case "vendor":   renderSummaryVendorView(left, right);  break;
     case "roadmap":  renderSummaryRoadmapView(left, right); break;
+    case "export":   renderExportReportView(left, right);   break;
   }
 }
 
