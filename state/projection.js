@@ -91,16 +91,20 @@ export function getEngagementAsSession() {
     const i = eng.instances.byId[id];
     if (!i) return null;
     const out = {
-      id:            i.id,
-      state:         i.state,
-      layerId:       i.layerId,
-      environmentId: envUuidToCatalogId[i.environmentId] || i.environmentId,
-      label:         i.label,
-      vendor:        i.vendor,
-      vendorGroup:   i.vendorGroup,
-      criticality:   i.criticality,
-      notes:         i.notes,
-      disposition:   i.disposition
+      id:                   i.id,
+      state:                i.state,
+      layerId:              i.layerId,
+      environmentId:        envUuidToCatalogId[i.environmentId] || i.environmentId,
+      label:                i.label,
+      vendor:               i.vendor,
+      vendorGroup:          i.vendorGroup,
+      criticality:          i.criticality,
+      notes:                i.notes,
+      disposition:          i.disposition,
+      endOfSaleDate:        i.endOfSaleDate        ?? null,
+      endOfSupportDate:     i.endOfSupportDate     ?? null,
+      endOfServiceLifeDate: i.endOfServiceLifeDate ?? null,
+      nodeCount:            i.nodeCount            ?? null
     };
     if (i.priority   !== null && i.priority   !== undefined) out.priority   = i.priority;
     if (i.originId   !== null && i.originId   !== undefined) out.originId   = i.originId;

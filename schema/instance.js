@@ -56,6 +56,10 @@ export const InstanceSchema = z.object({
   criticality:   z.enum(["High", "Medium", "Low"]),
   notes:         z.string().default(""),
   disposition:   z.string().min(1),                       // FK to DISPOSITION_ACTIONS
+  endOfSaleDate:        z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+  endOfSupportDate:     z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+  endOfServiceLifeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().default(null),
+  nodeCount:            z.number().int().nonnegative().nullable().default(null),
 
   // State-conditional (validated by .superRefine):
   originId:      z.string().uuid().nullable().default(null),
@@ -107,6 +111,10 @@ export function createEmptyInstance(overrides = {}) {
     criticality:   overrides.criticality   ?? "Medium",
     notes:         overrides.notes         ?? "",
     disposition:   overrides.disposition   ?? "keep",
+    endOfSaleDate:        overrides.endOfSaleDate        ?? null,
+    endOfSupportDate:     overrides.endOfSupportDate     ?? null,
+    endOfServiceLifeDate: overrides.endOfServiceLifeDate ?? null,
+    nodeCount:            overrides.nodeCount            ?? null,
     originId:      overrides.originId      ?? null,
     priority:      overrides.priority      ?? null,
     mappedAssetIds: overrides.mappedAssetIds ?? [],

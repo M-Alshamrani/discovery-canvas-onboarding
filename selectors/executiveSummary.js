@@ -9,8 +9,40 @@ import { memoizeOne } from "../services/memoizeOne.js";
 import { selectHealthSummary } from "./healthSummary.js";
 import { selectGapsKanban }    from "./gapsKanban.js";
 import { selectVendorMix }     from "./vendorMix.js";
+import { computeLifecycleRisk } from "../services/healthMetrics.js";
 
 const PRIORITY_RANK = { High: 2, Medium: 1, Low: 0 };
+const LIFECYCLE_SEVERITY_RANK = { critical: 0, high: 1, elevated: 2 };
+
+// lifecycleRisk · every current instance past or nearing end-of-support /
+// end-of-service-life, sorted most-severe first. Mirrors the same
+// computeLifecycleRisk used to (a) score the health heatmap and (b)
+// auto-draft gaps, so the executive summary's count always agrees with
+// what Tab 1's lifecycle fields and Tab 4's auto-drafted gaps show.
+function computeLifecycleRiskSummary(engagement) {
+  const items = [];
+  let critical = 0, high = 0, elevated = 0;
+  for (const id of engagement.instances.allIds) {
+    const inst = engagement.instances.byId[id];
+    if (inst.state !== "current") continue;
+    const risk = computeLifecycleRisk(inst);
+    if (risk.severity === "none") continue;
+    if (risk.severity === "critical") critical++;
+    else if (risk.severity === "high") high++;
+    else if (risk.severity === "elevated") elevated++;
+    items.push({
+      instanceId:    inst.id,
+      label:         inst.label,
+      layerId:       inst.layerId,
+      environmentId: inst.environmentId,
+      severity:      risk.severity,
+      reason:        risk.reason,
+      days:          risk.days
+    });
+  }
+  items.sort((a, b) => LIFECYCLE_SEVERITY_RANK[a.severity] - LIFECYCLE_SEVERITY_RANK[b.severity]);
+  return { critical, high, elevated, total: items.length, items };
+}
 
 function compute(engagement) {
   const meta = engagement.meta;
@@ -67,6 +99,7 @@ function compute(engagement) {
     },
     drivers:               { topPriority, all: driverList },
     health,
+    lifecycleRisk:         computeLifecycleRiskSummary(engagement),
     gapHighlights:         { mostUrgent, byPhase: {
                               now:   sumPhase(kanban, "now"),
                               next:  sumPhase(kanban, "next"),

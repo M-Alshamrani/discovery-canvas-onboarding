@@ -1801,9 +1801,9 @@ button { font-family: var(--font); cursor: pointer; border: none; border-radius:
 }
 .matrix-layer-bar[data-layer-id="workload"]       { background: var(--rule-strong); }
 .matrix-layer-bar[data-layer-id="compute"]        { background: #E5B560; }
+.matrix-layer-bar[data-layer-id="virtualization"]  { background: #6BA3D8; }
 .matrix-layer-bar[data-layer-id="storage"]        { background: #D4A86A; }
 .matrix-layer-bar[data-layer-id="dataProtection"] { background: #E08896; }
-.matrix-layer-bar[data-layer-id="virtualization"] { background: #6BA3D8; }
 .matrix-layer-bar[data-layer-id="infrastructure"] { background: #6FB988; }
 .matrix-layer-code {
   position: absolute;
@@ -1883,6 +1883,31 @@ button { font-family: var(--font); cursor: pointer; border: none; border-radius:
 .instance-tile.vg-custom  { border-left-color: var(--custom-strip); }
 .instance-tile:hover, .instance-tile.selected { background: var(--dell-blue-faint); border-color: var(--dell-blue); border-left-color: var(--dell-blue) !important; }
 .tile-label  { font-weight: 600; flex: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 130px; }
+.tile-life-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  min-width: 0;
+  margin-top: 2px;
+  flex: 1 1 auto;
+}
+.tile-life-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  line-height: 1.4;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  border: 1px solid transparent;
+}
+.tile-life-chip-date { background: #EEF5FF; color: var(--dell-blue-dark); border-color: #CFE1FB; }
+.tile-life-chip-date[data-lifecycle-prop="endOfSupportDate"] { background: #FDF7E6; color: #8A5B00; border-color: #F6DB96; }
+.tile-life-chip-date[data-lifecycle-prop="endOfServiceLifeDate"] { background: #FDEBEC; color: #A11D33; border-color: #F3C3CB; }
+.tile-life-chip-nodes { background: #EAF7EF; color: #0D6B31; border-color: #C7E8D2; }
 .tile-crit-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--high); flex-shrink: 0; }
 .tile-del {
   display: none; background: none; border: none; color: var(--text-3);
@@ -1891,6 +1916,21 @@ button { font-family: var(--font); cursor: pointer; border: none; border-radius:
 }
 .instance-tile:hover .tile-del { display: block; }
 .tile-del:hover { color: var(--high); }
+.lifecycle-field { gap: 6px; }
+.lifecycle-input-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.lifecycle-toggle {
+  width: 118px;
+  flex: 0 0 118px;
+}
+.lifecycle-date-input,
+.lifecycle-number-input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
 .add-tile-btn {
   width: 100%; padding: 3px 6px; border-radius: var(--radius-sm);
   border: 1px dashed var(--border-mid); background: transparent;
@@ -4009,6 +4049,107 @@ button { font-family: var(--font); cursor: pointer; border: none; border-radius:
   width: 6px;
   height: 2px;
   background: var(--dell-blue);
+}
+
+/* ── Export Report View (ExportReportView.js) ──────────────────────
+   Preview panel + download/open buttons for the standalone HTML
+   report generator. Lives in the 5th reporting sub-tab ("Export report").
+   Styled to match the rest of the Dell Discovery Canvas design system.
+   ─────────────────────────────────────────────────────────────────── */
+
+/* Actions row — generate + download buttons */
+.export-report-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.er-generate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.er-download-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 20px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* Sections preview card */
+.er-sections-card .card-title {
+  margin-bottom: 6px;
+}
+
+.er-section-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  margin-top: 12px;
+}
+
+.er-section-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.er-section-item:last-child {
+  border-bottom: none;
+}
+
+.er-section-num {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--dell-blue-soft);
+  color: var(--dell-blue);
+  font-size: 11px;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-top: 1px;
+}
+
+.er-section-body {
+  flex: 1;
+}
+
+.er-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-1);
+  margin-bottom: 2px;
+}
+
+.er-section-desc {
+  font-size: 12px;
+  color: var(--text-3);
+  line-height: 1.4;
+}
+
+/* Warning box shown in right panel when no data exists */
+.er-warn-box {
+  margin-top: 14px;
+  padding: 12px 14px;
+  background: var(--high-bg);
+  border: 1px solid var(--high-border);
+  border-left: 3px solid var(--high);
+  border-radius: 0 6px 6px 0;
+  font-size: 12px;
+  color: var(--high);
+  line-height: 1.5;
 }
 
 /* ── Overlay (v2.4.13 S3 Overlay.js) ─────────────────────────────

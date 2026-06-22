@@ -203,7 +203,8 @@ function renderDetail(right, layerId, envId, session) {
   // Score breakdown
   if (m.hasData) {
     var breakdown = mk("div", "score-breakdown");
-    breakdown.innerHTML = "Criticality score: <strong>" + m.currentScore.toFixed(1) + "</strong>  |  Gap urgency score: <strong>" + m.gapScore.toFixed(1) + "</strong>";
+    breakdown.innerHTML = "Criticality score: <strong>" + m.currentScore.toFixed(1) + "</strong>  |  Gap urgency score: <strong>" + m.gapScore.toFixed(1) + "</strong>" +
+      (m.lifecycleScore > 0 ? "  |  Lifecycle risk score: <strong>" + m.lifecycleScore.toFixed(1) + "</strong>" : "");
     panel.appendChild(breakdown);
   }
 
@@ -223,6 +224,18 @@ function renderDetail(right, layerId, envId, session) {
         row.appendChild(mkt("span", "urgency-badge " + critClass(i.criticality), i.criticality));
       }
       if (i.notes) row.appendChild(mkt("div", "detail-note", i.notes));
+      panel.appendChild(row);
+    });
+  }
+
+  if (m.lifecycleRisks.length > 0) {
+    sep(panel, "Lifecycle risk");
+    m.lifecycleRisks.forEach(function(r) {
+      var row = mk("div", "detail-row");
+      row.appendChild(mkt("span", "urgency-badge " + (r.risk.severity === "elevated" ? "urg-med" : "urg-high"),
+        r.risk.severity === "critical" ? "Critical" : r.risk.severity === "high" ? "High" : "Elevated"));
+      row.appendChild(mkt("span", "detail-row-label", r.instance.label));
+      row.appendChild(mkt("div", "detail-note", r.risk.reason + " (" + Math.abs(r.risk.days) + "d " + (r.risk.days < 0 ? "ago" : "out") + ")"));
       panel.appendChild(row);
     });
   }

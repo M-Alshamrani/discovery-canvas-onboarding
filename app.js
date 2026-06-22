@@ -20,13 +20,14 @@ import { confirmAction, notifyError, notifyInfo, notifySuccess } from "./ui/comp
 import { openImportDataModal } from "./ui/components/ImportDataModal.js";
 import { buildSaveEnvelope, parseFileEnvelope, loadCanvas, suggestFilename, FILE_MIME } from "./services/canvasFile.js";
 import { renderContextView }         from "./ui/views/ContextView.js";
-import { renderMatrixView }          from "./ui/views/MatrixView.js";
+import { renderMatrixView, stopCurrentStateCountdownTimer } from "./ui/views/MatrixView.js";
 import { renderGapsEditView }        from "./ui/views/GapsEditView.js";
 import { renderReportingOverview }   from "./ui/views/ReportingView.js";
 import { renderSummaryHealthView }   from "./ui/views/SummaryHealthView.js";
 import { renderSummaryGapsView }     from "./ui/views/SummaryGapsView.js";
 import { renderSummaryVendorView }   from "./ui/views/SummaryVendorView.js";
 import { renderSummaryRoadmapView }  from "./ui/views/SummaryRoadmapView.js";
+import { renderExportReportView }    from "./ui/views/ExportReportView.js";
 
 // Stepper steps render with a mono leading-zero pattern (01 Context,
 // 02 Current state, ...). The label is just the readable name;
@@ -44,11 +45,12 @@ var STEPS = [
 // tab: per-gap and per-project services info already lives on the gap drawer
 // body, the Roadmap project-card chip row, and the Tab 4 multi-chip selector.
 var REPORTING_TABS = [
-  { id: "overview", label: "Overview"   },
-  { id: "health",   label: "Heatmap"    },
-  { id: "gaps",     label: "Gaps board" },
-  { id: "vendor",   label: "Vendor mix" },
-  { id: "roadmap",  label: "Roadmap"    }
+  { id: "overview", label: "Overview"      },
+  { id: "health",   label: "Heatmap"       },
+  { id: "gaps",     label: "Gaps board"    },
+  { id: "vendor",   label: "Vendor mix"    },
+  { id: "roadmap",  label: "Roadmap"       },
+  { id: "export",   label: "Export report" }
 ];
 
 var currentStep         = "context";
@@ -548,6 +550,7 @@ function renderStage() {
   var left  = document.getElementById("main-left");
   var right = document.getElementById("main-right");
   if (!left || !right) return;
+  stopCurrentStateCountdownTimer();
   left.innerHTML  = "";
   right.innerHTML = "";
 
@@ -595,6 +598,7 @@ function renderReportingTab(left, right) {
     case "gaps":     renderSummaryGapsView(left, right);    break;
     case "vendor":   renderSummaryVendorView(left, right);  break;
     case "roadmap":  renderSummaryRoadmapView(left, right); break;
+    case "export":   renderExportReportView(left, right);   break;
   }
 }
 

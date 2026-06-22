@@ -9,6 +9,40 @@
 // Hidden environments are the caller's responsibility: pass the visible
 // set via the `environments` param.
 
+// computeLifecycleRisk · pure read of a current instance's
+// endOfSupportDate / endOfServiceLifeDate against a reference date.
+// Severity order (most to least severe): critical (past end of service
+// life) > high (past end of support) > elevated (either date within the
+// next 180 days) > none. Weights feed computeBucketMetrics' totalScore
+// using the same scale as gap urgency (High=3, Medium=2, Low=1).
+const LIFECYCLE_WARNING_WINDOW_DAYS = 180;
+
+export function computeLifecycleRisk(instance, referenceDate) {
+  const none = { severity: "none", weight: 0, reason: null, days: null };
+  if (!instance || instance.state !== "current") return none;
+
+  const now = referenceDate || new Date();
+  const daysUntil = (dateStr) => Math.round((new Date(dateStr + "T00:00:00").getTime() - now.getTime()) / 86400000);
+
+  const eosl = instance.endOfServiceLifeDate;
+  const eos  = instance.endOfSupportDate;
+
+  if (eosl) {
+    const d = daysUntil(eosl);
+    if (d < 0) return { severity: "critical", weight: 3, reason: "past end of service life", days: d };
+  }
+  if (eos) {
+    const d = daysUntil(eos);
+    if (d < 0) return { severity: "high", weight: 2, reason: "past end of support", days: d };
+    if (d <= LIFECYCLE_WARNING_WINDOW_DAYS) return { severity: "elevated", weight: 1, reason: "approaching end of support", days: d };
+  }
+  if (eosl) {
+    const d = daysUntil(eosl);
+    if (d <= LIFECYCLE_WARNING_WINDOW_DAYS) return { severity: "elevated", weight: 1, reason: "approaching end of service life", days: d };
+  }
+  return none;
+}
+
 export function getHealthSummary(session, layers, environments) {
   return {
     totalBuckets:  (layers?.length || 0) * (environments?.length || 0),
@@ -25,10 +59,18 @@ export function computeBucketMetrics(layerId, envId, session) {
     i => i.state === "current" && i.layerId === layerId && i.environmentId === envId
   );
   let currentScore = 0;
+  let lifecycleScore = 0;
+  const lifecycleRisks = [];
   current.forEach(i => {
     if      (i.criticality === "High")   currentScore += 2;
     else if (i.criticality === "Medium") currentScore += 1;
     else if (i.criticality === "Low")    currentScore += 0.5;
+
+    const risk = computeLifecycleRisk(i);
+    if (risk.severity !== "none") {
+      lifecycleScore += risk.weight;
+      lifecycleRisks.push({ instance: i, risk });
+    }
   });
 
   const gaps = (session.gaps || []).filter(g => {
@@ -43,9 +85,9 @@ export function computeBucketMetrics(layerId, envId, session) {
     else if (g.urgency === "Low")    gapScore += 1;
   });
 
-  const totalScore = currentScore + gapScore;
+  const totalScore = currentScore + gapScore + lifecycleScore;
   const hasData    = current.length > 0 || gaps.length > 0;
-  return { totalScore, currentScore, gapScore, hasData, current, gaps };
+  return { totalScore, currentScore, gapScore, lifecycleScore, lifecycleRisks, hasData, current, gaps };
 }
 
 export function scoreToRiskLabel(totalScore, hasData) {
