@@ -37,6 +37,18 @@ On top of v3, the AI features were added in turn:
 - The Settings panel picks the AI model from a dropdown per provider, with a "Custom…" option for
   self-hosted endpoints; stale default fallback models were removed.
 
+## Lifecycle and reporting
+- Current-state compute, storage, and data-protection items can now carry end-of-sale,
+  end-of-support, and end-of-service-life dates. These feed a lifecycle-risk score into the
+  health heatmap, auto-draft (and auto-close) a gap when an asset is past or nearing its support
+  or service-life window, and surface in the executive reporting.
+- The Reporting tab gained a sixth sub-view, **Export report**: a self-contained HTML report —
+  executive summary, vendor mix, asset inventory, heatmap, risks and gaps, roadmap, and session
+  brief — that can be opened in a new tab or downloaded as a file, and printed to PDF.
+- The import-instructions document fed to the Dell-internal LLM was sharpened with a fuller
+  six-layer glossary and worked examples, fixing assets (like backup targets) landing on the
+  wrong layer on import.
+
 ---
 
 ## What changed when this clean copy was made

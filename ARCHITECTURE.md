@@ -37,7 +37,8 @@ Services sit alongside this flow for AI, file save/open, import, and other cross
   `adapter.js` is the read/write surface the UI uses; `collections/` holds the per-entity
   write actions.
 - `selectors/` — pure functions that compute read-only views (matrix, gaps kanban, vendor
-  mix, roadmap, health) from the engagement.
+  mix, roadmap, health — including lifecycle risk, see `services/healthMetrics.js`) from the
+  engagement.
 - `services/` — AI (`aiService`, `chatService`, `systemPromptAssembler`, the grounding
   pair), file save/open (`sessionFile`), the import pipeline, skills, roadmap, and the
   Workshop Notes pipeline.
@@ -45,8 +46,9 @@ Services sit alongside this flow for AI, file save/open, import, and other cross
   filter bars, notifications, the overlay shell).
 - `catalogs/` — the catalog data snapshots (business drivers, verticals, Dell product
   taxonomy, environment kinds, gap types, layers, service types).
-- `migrations/` — upgrades a file saved by an older version up to the current schema.
 - `vendor/` — third-party libraries (Zod, marked), vendored so there is nothing to install.
+
+There is no migration path for old files — see Persistence below.
 
 ---
 
@@ -123,7 +125,9 @@ data instead of inventing facts.
 
 - **Auto-save** to the browser's `localStorage` on every change.
 - **Save to file / Open file** for portability — a `.canvas` file you can keep or share.
-- `migrations/` upgrades a file saved by an older version to the current schema when you open it.
+- There is no migration path: `services/canvasFile.js` only loads a file whose schema version
+  matches the current one exactly. A file from an older version is politely declined with a
+  "start a fresh session" message; a file from a newer version asks for a newer build.
 
 ---
 

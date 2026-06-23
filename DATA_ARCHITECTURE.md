@@ -51,7 +51,7 @@ An Engagement is six kinds of record:
 | **customer** | The single customer record (name, vertical, region, notes). |
 | **driver** | A strategic / business driver the customer cares about. Many. |
 | **environment** | A place things run — data center, edge site, cloud region. Many. |
-| **instance** | One asset or workload, at a (state, layer, environment) cell. `state` is *current* (today) or *desired* (the plan). Many. |
+| **instance** | One asset or workload, at a (state, layer, environment) cell. `state` is *current* (today) or *desired* (the plan). Carries optional lifecycle dates (`endOfSaleDate`, `endOfSupportDate`, `endOfServiceLifeDate`) and a `nodeCount`; the UI only surfaces these on the compute, storage, and data-protection layers, and they feed health-score risk and gap auto-drafting (see [APP_BEHAVIOR_SPEC.md](APP_BEHAVIOR_SPEC.md)). Many. |
 | **gap** | An improvement opportunity derived from the current↔desired delta + a driver. Many. |
 
 `customer` and `engagementMeta` are **singletons** (exactly one). `driver`, `environment`,
@@ -190,8 +190,10 @@ Three fields are **levels** — `driver.priority`, `instance.criticality`, `gap.
 High / Medium / Low. A level is **not a rank**: several drivers can all be "High". Say "the High
 drivers", never "the top driver".
 
-Two fields are **phases** — `instance.priority` and `gap.phase` — Now / Next / Later. A phase **is**
-ordered (Now before Next).
+Two fields are **phases** — `instance.priority` (`Now`/`Next`/`Later`) and `gap.phase`
+(lowercase `now`/`next`/`later`) — a phase **is** ordered (Now before Next). The two fields use
+different casing on purpose — they're separate enums on separate entities, not a shared catalog —
+so don't assume one can be assigned directly to the other.
 
 The app keeps these apart on purpose (the data contract tags every field as one or the other),
 because confusing "most critical" with "do first" produces wrong roadmaps. Worth knowing before you

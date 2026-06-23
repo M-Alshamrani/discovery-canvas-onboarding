@@ -37,13 +37,15 @@ footer with file actions. You generally work left to right through the tabs:
 - **Context** — who the customer is (name, vertical, region) and the **business drivers**
   that matter to them, plus their **environments** (data centers, clouds, sites).
 - **Current state** — what they run today, shown as a grid of technology by environment
-  and layer.
+  and layer. Compute, storage, and data-protection items can also carry end-of-sale,
+  end-of-support, and end-of-service-life dates, which feed into risk scoring and reporting.
 - **Desired state** — what they want to run. Each item links back to a current item with a
   disposition: keep, enhance, replace, consolidate, retire, or introduce.
 - **Gaps** — the differences worth acting on. Each gap ties to a driver, has a type and an
   urgency (High / Medium / Low), and a phase: Now, Next, or Later.
 - **Reporting** — read-only views to present back to the customer: Overview, Heatmap,
-  Gaps Board (a kanban), Vendor Mix, and Roadmap.
+  Gaps Board (a kanban), Vendor Mix, Roadmap, and Export report (a standalone HTML file
+  you can download or open and print to PDF).
 
 Click the `?` icon on any tab for page-specific help.
 

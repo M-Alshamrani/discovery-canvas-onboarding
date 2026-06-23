@@ -16,7 +16,8 @@ A few orientation notes before the behaviors:
 - **The Canvas** is a single-page app that walks a Dell presales engineer through
   a customer discovery workshop. It has five main steps (tabs): Context, Current
   state, Desired state, Gaps, and Reporting. (The Reporting tab has its own
-  sub-views: Overview, Heatmap, Gaps board, Vendor mix, and Roadmap.)
+  sub-views: Overview, Heatmap, Gaps board, Vendor mix, Roadmap, and Export
+  report.)
 - **An engagement** is the whole working document for one customer: their profile,
   business drivers, environments, technology instances, and gaps. The app holds
   one active engagement at a time.
@@ -246,6 +247,36 @@ related checks enforce a single rule, the rule is stated once.
   offers on-prem hardware. Every layer must offer at least one cloud-native item
   in the public-cloud environment.
 
+### Lifecycle dates and risk scoring (current state only)
+
+- The app must let a current-state instance on the compute, storage, or
+  data-protection layer carry optional `endOfSaleDate`, `endOfSupportDate`, and
+  `endOfServiceLifeDate` fields (`YYYY-MM-DD`, blank by default) and an optional
+  non-negative `nodeCount`, edited from the detail panel under a "Lifecycle data"
+  divider; these fields are hidden on every other layer and on desired-state
+  instances.
+- The app must render a tile-level summary chip for each lifecycle date that is
+  set, labelled "Sale", "Support", or "Life", plus a "Nodes N" chip when a node
+  count is set; the chips refresh on a 60-second timer while the current-state
+  matrix is open, and only for the compute/storage/data-protection cells.
+- The app must derive a lifecycle risk severity from `endOfSupportDate` and
+  `endOfServiceLifeDate` against the current date: **critical** (past end of
+  service life), **high** (past end of support), **elevated** (either date within
+  180 days), or **none** — service-life severity always takes precedence over
+  support severity.
+- The app must weight lifecycle risk into the health heatmap's bucket score
+  (critical=3, high=2, elevated=1, summed as `lifecycleScore`, added to the
+  bucket's `totalScore` alongside criticality and gap scores).
+- The app must auto-draft a gap (`gapType: "replace"`, origin `autoDraft`,
+  description prefixed `"Lifecycle risk: "`) the first time an instance's
+  computed risk is elevated or worse, assigning urgency High and phase `now`
+  (Medium / `next` for elevated), and must update that same gap in place — never
+  duplicate it — on every subsequent save, unless the user has set
+  `urgencyOverride` on it.
+- The app must auto-close (not delete) a lifecycle-risk gap once its instance's
+  risk clears back to "none", and must re-open a previously-closed one if the
+  risk recurs.
+
 ### Dispositions (desired state)
 
 - The app must show a "mirror" (ghost) tile in the desired view for each current
@@ -391,7 +422,7 @@ related checks enforce a single rule, the rule is stated once.
 
 ---
 
-## 5. Reporting views (overview, heatmap, gaps board, vendor mix, roadmap)
+## 5. Reporting views (overview, heatmap, gaps board, vendor mix, roadmap, export report)
 
 ### Health and scoring
 
@@ -402,9 +433,11 @@ related checks enforce a single rule, the rule is stated once.
   urgency gaps as high-risk, and must exclude closed gaps from the high-risk
   count.
 - The app must score each bucket by combining a current-criticality score (High =
-  2, Medium = 1, Low = 0.5) and a gap-urgency score (High = 3, Medium = 2,
-  Low = 1), and translate the total into a risk label, including "No data" when a
-  bucket is empty and "Stable" at score zero with data.
+  2, Medium = 1, Low = 0.5), a gap-urgency score (High = 3, Medium = 2, Low = 1),
+  and a lifecycle-risk score (critical = 3, high = 2, elevated = 1, summed across
+  the bucket's current instances), and translate the total into a risk label,
+  including "No data" when a bucket is empty and "Stable" at score zero with
+  data.
 - The app must compute an account health score as an integer between 0 and 100
   (and return nothing for an empty engagement).
 - The app must compute a discovery-coverage percentage (0 on an empty engagement,
@@ -472,6 +505,24 @@ related checks enforce a single rule, the rule is stated once.
   services, and exclude services from closed gaps in that roll-up.
 - The app must list a gap's effective Dell solutions as the labels of its linked,
   Dell-tagged desired tiles, de-duplicated.
+
+### Export report
+
+- The app must offer a sixth Reporting sub-tab, "Export report", alongside
+  Overview, Heatmap, Gaps board, Vendor mix, and Roadmap.
+- The app must generate a self-contained HTML report (no external dependencies
+  besides Google Fonts) covering: an executive header (customer name, KPI
+  summary, date, prepared-by), an overview dashboard (vendor-mix donut, Dell vs.
+  non-Dell bars, category snapshot), a per-environment breakdown, a full asset
+  inventory table, the heatmap, a risks-and-gaps panel (including the lifecycle
+  risk list), the strategic roadmap, and an executive session brief — all
+  populated from the live engagement.
+- The app must offer two actions: "Generate & Open Report" (opens the HTML in a
+  new browser tab) and "Download HTML" (saves it to a file named from the
+  customer and a timestamp); the report must be printable to PDF via the
+  browser's print dialog.
+- The app must show a "No instances found" warning in the preview panel when the
+  engagement has zero instances, without blocking report generation.
 
 ---
 
@@ -807,7 +858,7 @@ related checks enforce a single rule, the rule is stated once.
 
 ---
 
-## 11. Persistence and migration
+## 11. Persistence and file versioning
 
 ### Boot persistence
 
@@ -816,27 +867,20 @@ related checks enforce a single rule, the rule is stated once.
 - The app must start fresh, without throwing, when the stored value is corrupt
   (malformed JSON or schema-invalid), and keep working normally afterwards.
 
-### Migration from older files
+### Loading a file from a different schema version
 
-- The app must migrate an older-format file to the current schema as part of
-  loading it, and the migration must be idempotent (migrating an already-current
-  file changes nothing) and deterministic (the same input always yields the same
-  result, including any generated ids).
-- The app must never mutate the input during migration (it works on a copy), and
-  must preserve source ordering of collections.
-- The migration must, among other steps: stamp the current schema version; carry
-  the old session id forward as the engagement id (or derive a stable one);
-  default a missing owner to local-user; carry timestamps forward; fold legacy
-  customer fields into notes (dropping redundant or already-present values);
-  convert driver, environment, instance, and gap lists into id-keyed collections;
-  normalise driver priority; drop the legacy per-gap project id; back-fill the
-  affected-layers, services, hidden, and urgency-override fields; and wrap a
-  legacy plain-string Dell mapping in a provenance wrapper marked "stale" while
-  keeping the original string.
-- The app must coerce the retired "rationalize" gap type to "ops" on load, and
-  auto-enable every environment referenced by an instance or gap.
-- The app must report a clear migration failure (naming the failing step) if
-  migration cannot complete, while leaving the original file untouched.
+There is no migration path: `services/canvasFile.js` accepts a file only when its
+declared schema version matches `CURRENT_SCHEMA_VERSION` exactly.
+
+- The app must reject a file whose schema version is older than the build's,
+  surfacing a `FILE_FROM_PREVIOUS_VERSION` error with a message naming both
+  versions and a "start a fresh session" recovery hint — it must not attempt to
+  upgrade or partially load the file.
+- The app must reject a file whose schema version is newer than the build's,
+  surfacing a `FILE_NEWER_THAN_BUILD` error asking the user to open it in a newer
+  build.
+- The app must leave the original file untouched in both rejection cases (the
+  envelope is only parsed, never written back).
 
 ### Catalog drift
 
