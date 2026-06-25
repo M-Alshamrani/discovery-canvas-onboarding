@@ -642,7 +642,7 @@ function wireFooter() {
     demoBtn.addEventListener("click", function() {
       confirmAction({
         title: "Load demo session?",
-        body: "This replaces the current canvas with the Acme Healthcare / Riyadh + Jeddah + Sovereign Cloud demo. Anything you've typed is lost (use Save to file first if you want to keep it).",
+        body: "This replaces the current canvas with the Meridian Heritage Development Authority (MHDA) / Site 1 + Site 2 + Azure demo. Anything you've typed is lost (use Save to file first if you want to keep it).",
         confirmLabel: "Load demo",
         danger: true
       }).then(async function(yes) {

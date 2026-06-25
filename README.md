@@ -81,7 +81,7 @@ without one.
 - **Save to file** writes a `.canvas` file you can re-open later or hand to a colleague.
 - **Open file** loads a `.canvas` file back in.
 - **Import data** brings in items from an external source.
-- **Load demo** loads an example customer ("Northstar Health Network") so you can explore.
+- **Load demo** loads an example customer ("Meridian Heritage Development Authority (MHDA)") so you can explore.
   **New session** starts empty. **Clear all data** wipes the browser copy.
 
 ---

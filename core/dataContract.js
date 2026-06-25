@@ -345,7 +345,7 @@ export const PICKER_METADATA = Object.freeze({
   "customer.name": {
     label: "Customer Name", category: "standard", entity: "customer",
     description: "The customer organization's name. The single most-referenced field across the canvas.",
-    sampleHint: "e.g. Northstar Health Network"
+    sampleHint: "e.g. Meridian Heritage Development Authority"
   },
   "customer.verticalLabel": {
     label: "Vertical / Segment", category: "standard", entity: "customer",
