@@ -26,6 +26,7 @@ import { renderReportingOverview }   from "./ui/views/ReportingView.js";
 import { renderSummaryHealthView }   from "./ui/views/SummaryHealthView.js";
 import { renderSummaryGapsView }     from "./ui/views/SummaryGapsView.js";
 import { renderSummaryVendorView }   from "./ui/views/SummaryVendorView.js";
+import { renderSummaryVendorCriticalityView } from "./ui/views/SummaryVendorCriticalityView.js";
 import { renderSummaryRoadmapView }  from "./ui/views/SummaryRoadmapView.js";
 import { renderExportReportView }    from "./ui/views/ExportReportView.js";
 
@@ -49,6 +50,7 @@ var REPORTING_TABS = [
   { id: "health",   label: "Heatmap"       },
   { id: "gaps",     label: "Gaps board"    },
   { id: "vendor",   label: "Vendor mix"    },
+  { id: "vendorCrit", label: "Vendor criticality" },
   { id: "roadmap",  label: "Roadmap"       },
   { id: "export",   label: "Export report" }
 ];
@@ -597,6 +599,7 @@ function renderReportingTab(left, right) {
     case "health":   renderSummaryHealthView(left, right);  break;
     case "gaps":     renderSummaryGapsView(left, right);    break;
     case "vendor":   renderSummaryVendorView(left, right);  break;
+    case "vendorCrit": renderSummaryVendorCriticalityView(left, right); break;
     case "roadmap":  renderSummaryRoadmapView(left, right); break;
     case "export":   renderExportReportView(left, right);   break;
   }

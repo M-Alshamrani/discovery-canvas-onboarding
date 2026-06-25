@@ -82,6 +82,16 @@ export const HELP_CONTENT = {
     ]
   },
 
+  reporting_vendor_criticality: {
+    title: "Reporting — Vendor Criticality",
+    body: [
+      "Each bubble is a vendor. Use 'Size by' and 'Colour by' to configure what the bubble encodes: criticality score or workload count for size; dominant criticality or vendor type for colour.",
+      "Score = sum of each vendor's current-instance criticality weights (High=2, Medium=1, Low=0.5) — the same scale the Heatmap tab uses. Dominant criticality = the highest severity present in any of that vendor's workloads.",
+      "Click a bubble to see all of that vendor's current workloads. Each one has its own Criticality dropdown that commits immediately and reflows the bubbles live.",
+      "Scoped to current state only — criticality is edited the same way it is on Tab 2 (Current State); desired-state items don't carry an independently-editable criticality."
+    ]
+  },
+
   reporting_roadmap: {
     title: "Reporting — Roadmap (the crown jewel)",
     body: [
