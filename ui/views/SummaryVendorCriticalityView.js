@@ -1,16 +1,20 @@
-// ui/views/SummaryVendorCriticalityView.js — vendor criticality packed bubble chart
+// ui/views/SummaryVendorCriticalityView.js — vendor × workload criticality
 //
-// Connects the three facts already on every current-state instance —
-// layerId (workload/service), vendor, and criticality — into one view:
-// a packed bubble per vendor, sized/coloured by how much critical exposure
-// it carries. Criticality is only ever independently edited on current
-// instances elsewhere in the app (see MatrixView's detail form), so this
-// tab scopes to current-state instances only rather than inventing
-// desired-state editing semantics.
+// Workloads (business apps) are the base of the estate: everything in the
+// other layers exists to RUN a workload. So this view is workload-centric —
+// a server is not a workload, it is a server running one. The unit here is
+// the current-state business workload, banded by ITS criticality (the only
+// criticality that matters for the business). A vendor "relates to" a
+// workload either by being the workload's own application vendor, or by
+// supplying one of the underlying technologies the workload is mapped to
+// (instance.mappedAssetIds → the compute/storage/etc. it runs on). That is
+// the vendor's exposure to that workload's criticality.
 //
-// The bubbles are laid out with a circle-packing algorithm (the front-chain
-// method from Wang et al. / d3-hierarchy packSiblings) and rendered as SVG,
-// so colours/sizes live in inline attributes — robust to stale CSS caches.
+// The Y axis is three equal criticality bands (Critical top, Low bottom).
+// Each band is a 100%-wide bar split by vendor (share of vendor↔workload
+// links at that criticality). The right panel ranks vendors by how many
+// workloads they touch; drilling in lists those workloads with the
+// workload's own criticality editable (commits via commitInstanceSetCriticality).
 
 import { LAYERS, getEnvLabel } from "../../core/config.js";
 import { layerLabel } from "../../core/labelResolvers.js";
@@ -19,33 +23,32 @@ import { getEngagementAsSession, getVisibleEnvsFromEngagement } from "../../stat
 import { renderDemoBanner } from "../components/DemoBanner.js";
 import { commitInstanceSetCriticality } from "../../state/adapter.js";
 
-// Same weight scale the Heatmap tab uses (services/healthMetrics.js) so a
-// "vendor criticality score" reads consistently with the rest of the app.
-var CRIT_WEIGHT = { High: 2, Medium: 1, Low: 0.5 };
+var PALETTE = [
+  "#0076CE", "#00843D", "#7B61FF", "#C8102E", "#F59E0B", "#0EA5E9",
+  "#DB2777", "#65A30D", "#9333EA", "#EA580C", "#0891B2", "#A16207"
+];
+var OTHER_COLOR = "#9CA3AF";
 
-// Hex values mirror the --crit-* / --*-strip CSS variables (styles.css).
-// Used inline on the SVG so the chart looks right even before CSS loads.
-var COLORS = {
-  high: "#d93025", medium: "#f59e0b", low: "#16a34a",
-  dell: "#0076ce", nonDell: "#9ca3af", custom: "#f59e0b"
-};
-// Label colour chosen for contrast against each fill.
-var TEXT_ON = {
-  high: "#ffffff", medium: "#3a2a00", low: "#ffffff",
-  dell: "#ffffff", nonDell: "#1f2937", custom: "#3a2a00"
-};
+var BANDS = [
+  { key: "High",   label: "Critical", crit: "high" },
+  { key: "Medium", label: "Medium",   crit: "medium" },
+  { key: "Low",    label: "Low",      crit: "low" }
+];
 
-var SIZE_OPTIONS  = [{ id: "score", label: "Criticality score" }, { id: "count", label: "Workload count" }];
-var COLOR_OPTIONS = [{ id: "criticality", label: "Criticality" }, { id: "vendorGroup", label: "Vendor type" }];
-
-var MAX_R = 96; // design-px radius of the largest bubble
-var MIN_R = 18; // floor so tiny vendors stay legible & clickable
+// The workload layer is the base, not a peer "layer" — relabel it so the
+// exposure-source filter reads as "the workload's own app vendor".
+function exposureLabel(layerId) {
+  return layerId === "workload" ? "Business app" : layerLabel(layerId);
+}
 
 export function renderSummaryVendorCriticalityView(left, right, sessionArg) {
   var liveSession = sessionArg || getEngagementAsSession();
+  // Exposure sources: which layers attribute a vendor to a workload.
+  // "workload" = the app's own vendor; the rest = mapped underlying tech.
   var activeLayerIds = new Set(LAYERS.map(function(l) { return l.id; }));
-  var sizeBy  = "score";
-  var colorBy = "criticality";
+
+  var rightMode = "breakdown";  // "breakdown" | "vendor"
+  var currentVendor = null;
 
   if (liveSession && liveSession.isDemo) renderDemoBanner(left);
 
@@ -55,26 +58,20 @@ export function renderSummaryVendorCriticalityView(left, right, sessionArg) {
   titleRow.appendChild(helpButton("reporting_vendor_criticality"));
   overview.appendChild(titleRow);
   overview.appendChild(mkt("div", "card-hint",
-    "Each bubble is a vendor. Size and colour are configurable below. Click a bubble to see its current workloads and retriage their criticality."));
+    "Business workloads banded by their criticality. Each band is split by the vendors exposed to those workloads — the app's own vendor plus the vendors of the technology it runs on. Click a segment or a vendor to retriage the workloads behind it."));
+  var coverageHint = mkt("div", "card-hint vc-coverage", "");
+  overview.appendChild(coverageHint);
 
   var filterRow = mk("div", "filter-row");
-  filterRow.appendChild(mkt("span", "filter-label", "Layers:"));
+  filterRow.appendChild(mkt("span", "filter-label", "Vendor exposure from:"));
   var chipsHost = mk("div", "chips-row");
   filterRow.appendChild(chipsHost);
   overview.appendChild(filterRow);
-
-  var configRow = mk("div", "vc-config-row");
-  configRow.appendChild(buildConfigGroup("Size by", SIZE_OPTIONS, sizeBy, function(val) { sizeBy = val; renderAll(); }));
-  configRow.appendChild(buildConfigGroup("Colour by", COLOR_OPTIONS, colorBy, function(val) { colorBy = val; renderAll(); }));
-  overview.appendChild(configRow);
-
-  var legend = mk("div", "vc-legend");
-  overview.appendChild(legend);
   left.appendChild(overview);
 
   LAYERS.forEach(function(layer) {
     var chip = mk("div", "chip-filter active");
-    chip.textContent = layer.label;
+    chip.textContent = exposureLabel(layer.id);
     chip.addEventListener("click", function() {
       chip.classList.toggle("active");
       if (chip.classList.contains("active")) activeLayerIds.add(layer.id);
@@ -88,177 +85,262 @@ export function renderSummaryVendorCriticalityView(left, right, sessionArg) {
     chipsHost.appendChild(chip);
   });
 
-  var boardCard = mk("div", "card");
-  boardCard.appendChild(mkt("div", "card-title", "Vendor map"));
-  var board = mk("div", "vc-chart-host");
-  boardCard.appendChild(board);
-  left.appendChild(boardCard);
+  var chartCard = mk("div", "card");
+  var chartTitleRow = mk("div", "card-title-row");
+  chartTitleRow.appendChild(mkt("div", "card-title", "Workloads by criticality"));
+  var totalChip = mkt("span", "chip-stat", "");
+  chartTitleRow.appendChild(totalChip);
+  chartCard.appendChild(chartTitleRow);
+  var chartHost = mk("div", "vc-band-chart");
+  chartCard.appendChild(chartHost);
+  left.appendChild(chartCard);
 
-  showPlaceholder();
-
-  function buildConfigGroup(label, options, activeId, onPick) {
-    var el = mk("div", "vc-config-group");
-    el.appendChild(mkt("span", "vc-config-label", label + ":"));
-    var chipsEl = mk("div", "vc-config-chips");
-    options.forEach(function(opt) {
-      var chip = mkt("button", "vc-config-chip" + (opt.id === activeId ? " active" : ""), opt.label);
-      chip.type = "button";
-      chip.addEventListener("click", function() {
-        chipsEl.querySelectorAll(".vc-config-chip").forEach(function(c) { c.classList.remove("active"); });
-        chip.classList.add("active");
-        onPick(opt.id);
-      });
-      chipsEl.appendChild(chip);
-    });
-    el.appendChild(chipsEl);
-    return el;
-  }
-
-  function renderLegend() {
-    legend.innerHTML = "";
-    var keys = colorBy === "criticality"
-      ? [["high", "High"], ["medium", "Medium"], ["low", "Low"]]
-      : [["dell", "Dell"], ["nonDell", "Non-Dell"], ["custom", "Custom"]];
-    keys.forEach(function(p) {
-      var item = mk("span", "vc-legend-item");
-      var dot = mk("span", "vc-legend-dot");
-      dot.style.background = COLORS[p[0]];
-      item.appendChild(dot);
-      item.appendChild(document.createTextNode(" " + p[1]));
-      legend.appendChild(item);
-    });
-  }
-
+  // ─── data ──────────────────────────────────────────────────────────────
   function ids() { return [...activeLayerIds]; }
 
-  function currentInstances() {
-    var all = (liveSession && Array.isArray(liveSession.instances)) ? liveSession.instances : [];
-    var layerSet = {};
-    ids().forEach(function(id) { layerSet[id] = true; });
-    return all.filter(function(i) { return i.state === "current" && layerSet[i.layerId]; });
+  function allCurrentById() {
+    var map = new Map();
+    (liveSession && Array.isArray(liveSession.instances) ? liveSession.instances : [])
+      .forEach(function(i) { if (i.state === "current") map.set(i.id, i); });
+    return map;
   }
 
-  function computeVendorRows() {
-    var byVendor = new Map();
-    currentInstances().forEach(function(i) {
-      var key = i.vendor || "(unlabeled vendor)";
-      if (!byVendor.has(key)) {
-        byVendor.set(key, { vendor: key, vendorGroup: i.vendorGroup || "custom", instances: [], score: 0, counts: { High: 0, Medium: 0, Low: 0 } });
-      }
-      var row = byVendor.get(key);
-      row.instances.push(i);
-      var w = CRIT_WEIGHT[i.criticality] || 0;
-      row.score += w;
-      if (row.counts[i.criticality] !== undefined) row.counts[i.criticality]++;
+  function currentWorkloads() {
+    return (liveSession && Array.isArray(liveSession.instances) ? liveSession.instances : [])
+      .filter(function(i) { return i.state === "current" && i.layerId === "workload"; });
+  }
+
+  // For one workload, the vendors exposed to it (per the active sources) and
+  // the role(s) each plays. Each vendor counts once for the workload.
+  function exposedVendors(W, byId) {
+    var map = new Map(); // vendorName -> { vendor, vendorGroup, roles:[] }
+    function add(vendor, vendorGroup, role) {
+      if (!vendor) vendor = "(unlabeled vendor)";
+      if (!map.has(vendor)) map.set(vendor, { vendor: vendor, vendorGroup: vendorGroup || "custom", roles: [] });
+      if (role) map.get(vendor).roles.push(role);
+    }
+    if (activeLayerIds.has("workload")) add(W.vendor, W.vendorGroup, "Business app");
+    (W.mappedAssetIds || []).forEach(function(aid) {
+      var A = byId.get(aid);
+      if (!A) return;
+      if (!activeLayerIds.has(A.layerId)) return;
+      add(A.vendor, A.vendorGroup, layerLabel(A.layerId) + ": " + (A.label || "asset"));
     });
-    return [...byVendor.values()].sort(function(a, b) { return b.score - a.score; });
+    return map;
   }
 
-  function dominantCriticality(row) {
-    if (row.counts.High   > 0) return "high";
-    if (row.counts.Medium > 0) return "medium";
-    return "low";
+  function computeModel() {
+    var byId = allCurrentById();
+    var workloads = currentWorkloads();
+    var mappedCount = workloads.filter(function(w) { return (w.mappedAssetIds || []).length > 0; }).length;
+
+    var vendors = new Map(); // name -> aggregate
+    var bandWorkloadIds = { High: new Set(), Medium: new Set(), Low: new Set() };
+
+    workloads.forEach(function(W) {
+      var crit = W.criticality || "Low"; // criticality is required-non-null; default-safe
+      var exposed = exposedVendors(W, byId);
+      exposed.forEach(function(info, name) {
+        if (!vendors.has(name)) {
+          vendors.set(name, { vendor: name, vendorGroup: info.vendorGroup, counts: { High: 0, Medium: 0, Low: 0 }, total: 0, rels: [], wlSet: new Set() });
+        }
+        var v = vendors.get(name);
+        if (v.counts[crit] !== undefined) v.counts[crit]++;
+        if (!v.wlSet.has(W.id)) { v.wlSet.add(W.id); v.total++; }
+        v.rels.push({ wl: W, crit: crit, roles: info.roles });
+        bandWorkloadIds[crit].add(W.id);
+      });
+    });
+
+    var list = [...vendors.values()].sort(function(a, b) {
+      return b.total - a.total || a.vendor.localeCompare(b.vendor);
+    });
+    list.forEach(function(v, idx) {
+      v.rank = idx;
+      v.color = idx < PALETTE.length ? PALETTE[idx] : OTHER_COLOR;
+      v.isOther = idx >= PALETTE.length;
+    });
+
+    return {
+      list: list,
+      byName: vendors,
+      workloadsTotal: workloads.length,
+      mappedCount: mappedCount,
+      bandWorkloadIds: bandWorkloadIds
+    };
   }
 
-  function sizeValueOf(row) { return sizeBy === "count" ? row.instances.length : row.score; }
-
+  // ─── render ────────────────────────────────────────────────────────────
   function renderAll() {
-    renderLegend();
-    var rows = computeVendorRows();
-    board.innerHTML = "";
-    if (rows.length === 0) {
-      board.appendChild(mkt("div", "vc-empty", "No current-state workloads or services match the active layer filter."));
-      showPlaceholder();
+    var model = computeModel();
+    totalChip.textContent = model.workloadsTotal + " workload" + (model.workloadsTotal === 1 ? "" : "s") +
+      " · " + model.list.length + " vendor" + (model.list.length === 1 ? "" : "s");
+    var unmapped = model.workloadsTotal - model.mappedCount;
+    coverageHint.textContent = unmapped > 0
+      ? model.mappedCount + " of " + model.workloadsTotal + " workloads are mapped to their underlying technology — map the rest in Current State to expose full vendor lock-in."
+      : "All " + model.workloadsTotal + " workloads are mapped to their underlying technology.";
+    renderChart(model);
+    renderRight(model);
+  }
+
+  function renderChart(model) {
+    chartHost.innerHTML = "";
+    if (model.workloadsTotal === 0) {
+      chartHost.appendChild(mkt("div", "vc-empty", "No current-state business workloads yet. Add workloads in Current State (the 'Workloads & Business Apps' layer)."));
       return;
     }
 
-    var maxV = Math.max.apply(null, rows.map(sizeValueOf)) || 1;
-    // Area ∝ value → radius ∝ sqrt(value); floor keeps small vendors usable.
-    var circles = rows.map(function(row) {
-      return { r: Math.max(Math.sqrt(sizeValueOf(row) / maxV) * MAX_R, MIN_R), row: row, x: 0, y: 0 };
-    });
-    // Pack largest-first for a tight, centered cluster.
-    packCircles(circles.slice().sort(function(a, b) { return b.r - a.r; }));
+    BANDS.forEach(function(band) {
+      var levelVendors = model.list
+        .filter(function(v) { return v.counts[band.key] > 0; })
+        .sort(function(a, b) { return a.rank - b.rank; });
+      var levelTotal = levelVendors.reduce(function(s, v) { return s + v.counts[band.key]; }, 0);
+      var wlCount = model.bandWorkloadIds[band.key].size;
 
-    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    circles.forEach(function(c) {
-      minX = Math.min(minX, c.x - c.r); maxX = Math.max(maxX, c.x + c.r);
-      minY = Math.min(minY, c.y - c.r); maxY = Math.max(maxY, c.y + c.r);
+      var bandEl = mk("div", "vc-band vc-band-" + band.crit);
+
+      var axis = mk("div", "vc-band-axis");
+      axis.appendChild(mk("span", "vc-band-tick crit-shape-" + band.crit));
+      axis.appendChild(mkt("span", "vc-band-name", band.label));
+      axis.appendChild(mkt("span", "vc-band-count", wlCount + (wlCount === 1 ? " workload" : " workloads")));
+      bandEl.appendChild(axis);
+
+      var barWrap = mk("div", "vc-band-barwrap");
+      if (levelTotal === 0) {
+        barWrap.appendChild(mkt("div", "vc-band-empty", "No " + band.label.toLowerCase() + "-criticality workloads"));
+      } else {
+        var bar = mk("div", "vc-band-bar");
+        var segs = [];
+        var otherCount = 0;
+        levelVendors.forEach(function(v) {
+          if (v.isOther) otherCount += v.counts[band.key];
+          else segs.push({ vendor: v.vendor, count: v.counts[band.key], color: v.color, clickable: true });
+        });
+        if (otherCount > 0) segs.push({ vendor: "Other", count: otherCount, color: OTHER_COLOR, clickable: false });
+
+        segs.forEach(function(s) {
+          var frac = s.count / levelTotal;
+          var seg = mk("div", "vc-seg");
+          seg.style.flex = s.count + " 1 0";
+          seg.style.background = s.color;
+          seg.style.color = textOn(s.color);
+          seg.title = s.vendor + " · exposed to " + s.count + " " + band.label.toLowerCase() +
+            "-criticality workload" + (s.count === 1 ? "" : "s") + " (" + Math.round(frac * 100) + "%)";
+          if (frac >= 0.11) {
+            var lbl = mk("div", "vc-seg-label");
+            lbl.appendChild(mkt("span", "vc-seg-name", s.vendor));
+            lbl.appendChild(mkt("span", "vc-seg-count", String(s.count)));
+            seg.appendChild(lbl);
+          }
+          if (s.clickable) {
+            seg.classList.add("is-clickable");
+            seg.addEventListener("click", function() { openVendor(s.vendor); });
+          }
+          bar.appendChild(seg);
+        });
+        barWrap.appendChild(bar);
+      }
+      bandEl.appendChild(barWrap);
+      chartHost.appendChild(bandEl);
     });
-    var pad = 8;
-    var root = svgEl("svg", {
-      class: "vc-svg",
-      viewBox: (minX - pad) + " " + (minY - pad) + " " + ((maxX - minX) + pad * 2) + " " + ((maxY - minY) + pad * 2),
-      preserveAspectRatio: "xMidYMid meet"
-    });
-    // Draw largest first so smaller bubbles layer cleanly on top.
-    circles.slice().sort(function(a, b) { return b.r - a.r; }).forEach(function(c) {
-      root.appendChild(buildBubble(c));
-    });
-    board.appendChild(root);
   }
 
-  function buildBubble(c) {
-    var row = c.row;
-    var key = colorBy === "criticality" ? dominantCriticality(row) : row.vendorGroup;
-    var fill = COLORS[key] || COLORS.custom;
-    var textColor = TEXT_ON[key] || "#ffffff";
-    var r = c.r;
-
-    var g = svgEl("g", { class: "vc-bubble-g", transform: "translate(" + c.x + "," + c.y + ")", role: "button", tabindex: "0" });
-    g.style.cursor = "pointer";
-
-    var circle = svgEl("circle", { r: r, fill: fill, stroke: "#ffffff", "stroke-width": 2 });
-    g.appendChild(circle);
-
-    var n = row.instances.length;
-    var valueText = sizeBy === "count" ? n + (n === 1 ? " workload" : " workloads") : "Score " + trimScore(row.score);
-
-    var title = svgEl("title", {});
-    title.textContent = row.vendor + " · score " + trimScore(row.score) + " · " + n +
-      (n === 1 ? " workload" : " workloads") + " · " +
-      row.counts.High + " High / " + row.counts.Medium + " Med / " + row.counts.Low + " Low";
-    g.appendChild(title);
-
-    if (r >= 38) {
-      var nameFont = Math.min(r * 0.40, 22);
-      var valueFont = Math.min(r * 0.30, 15);
-      var name = fitName(row.vendor, r, nameFont);
-      g.appendChild(svgText(name, { y: -valueFont * 0.55, "font-size": nameFont, "font-weight": 700, fill: textColor }));
-      g.appendChild(svgText(valueText, { y: nameFont * 0.62, "font-size": valueFont, "font-weight": 500, fill: textColor, opacity: 0.92 }));
-    } else if (r >= 24) {
-      var f = Math.min(r * 0.42, 14);
-      g.appendChild(svgText(sizeBy === "count" ? String(n) : trimScore(row.score), { y: 0, "font-size": f, "font-weight": 700, fill: textColor }));
-    }
-
-    g.addEventListener("click", function() { renderVendorDetail(row); });
-    g.addEventListener("keydown", function(e) {
-      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); renderVendorDetail(row); }
-    });
-    return g;
+  function openVendor(name) {
+    rightMode = "vendor";
+    currentVendor = name;
+    renderRight(computeModel());
   }
 
-  // Truncate a vendor name to roughly fit inside a bubble of radius r.
-  function fitName(name, r, font) {
-    var charW = font * 0.56;
-    var maxChars = Math.floor((r * 1.7) / charW);
-    if (maxChars < 1) return "";
-    if (name.length <= maxChars) return name;
-    if (maxChars <= 1) return name.slice(0, 1);
-    return name.slice(0, maxChars - 1) + "…";
-  }
-
-  function trimScore(num) {
-    return (Math.round(num * 10) / 10).toString();
-  }
-
-  function showPlaceholder() {
+  function renderRight(model) {
     right.innerHTML = "";
-    var ph = mk("div", "detail-placeholder");
-    ph.appendChild(mkt("div", "detail-ph-title", "Drill into a vendor"));
-    ph.appendChild(mkt("div", "detail-ph-hint",
-      "Click a bubble to see all of that vendor's current workloads and retriage their criticality."));
-    right.appendChild(ph);
+    if (model.workloadsTotal === 0 || model.list.length === 0) {
+      var ph = mk("div", "detail-placeholder");
+      ph.appendChild(mkt("div", "detail-ph-title", "No workload vendors"));
+      ph.appendChild(mkt("div", "detail-ph-hint", "Add business workloads (and map their underlying technology) to see vendor exposure here."));
+      right.appendChild(ph);
+      return;
+    }
+    if (rightMode === "vendor" && currentVendor) {
+      var v = model.byName.get(currentVendor);
+      if (v) { renderVendorPanel(v, model); return; }
+      rightMode = "breakdown";
+    }
+    renderBreakdownPanel(model);
+  }
+
+  function renderBreakdownPanel(model) {
+    var panel = mk("div", "detail-panel");
+    panel.appendChild(mkt("div", "detail-title", "Vendors"));
+    panel.appendChild(mkt("div", "detail-sub",
+      model.list.length + " vendor" + (model.list.length === 1 ? "" : "s") + " across " + model.workloadsTotal + " workloads"));
+    panel.appendChild(mkSep("Workloads each vendor is exposed to"));
+
+    model.list.forEach(function(v) {
+      var rowEl = mk("button", "vc-vendor-row");
+      rowEl.type = "button";
+      var sw = mk("span", "vc-swatch");
+      sw.style.background = v.color;
+      rowEl.appendChild(sw);
+
+      var mid = mk("div", "vc-vendor-mid");
+      mid.appendChild(mkt("div", "vc-vendor-name", v.vendor));
+      var bd = mk("div", "vc-vendor-breakdown");
+      [["High", "high"], ["Medium", "medium"], ["Low", "low"]].forEach(function(p) {
+        if (v.counts[p[0]] > 0) {
+          var tag = mk("span", "vc-mini crit-shape-" + p[1]);
+          tag.appendChild(mkt("span", "vc-mini-n", String(v.counts[p[0]])));
+          bd.appendChild(tag);
+        }
+      });
+      mid.appendChild(bd);
+      rowEl.appendChild(mid);
+
+      var pct = model.workloadsTotal ? Math.round((v.total / model.workloadsTotal) * 100) : 0;
+      var right2 = mk("div", "vc-vendor-right");
+      right2.appendChild(mkt("div", "vc-vendor-total", String(v.total)));
+      right2.appendChild(mkt("div", "vc-vendor-pct", pct + "%"));
+      rowEl.appendChild(right2);
+
+      rowEl.addEventListener("click", function() { openVendor(v.vendor); });
+      panel.appendChild(rowEl);
+    });
+    right.appendChild(panel);
+  }
+
+  function renderVendorPanel(v, model) {
+    var panel = mk("div", "detail-panel");
+    var back = mkt("button", "vc-back-link", "← All vendors");
+    back.type = "button";
+    back.addEventListener("click", function() { rightMode = "breakdown"; currentVendor = null; renderRight(computeModel()); });
+    panel.appendChild(back);
+
+    var head = mk("div", "vc-vendor-head");
+    var sw = mk("span", "vc-swatch");
+    sw.style.background = v.color;
+    head.appendChild(sw);
+    head.appendChild(mkt("div", "detail-title", v.vendor));
+    panel.appendChild(head);
+
+    var pct = model.workloadsTotal ? Math.round((v.total / model.workloadsTotal) * 100) : 0;
+    panel.appendChild(mkt("div", "detail-sub",
+      "Exposed to " + v.total + " of " + model.workloadsTotal + " workload" + (model.workloadsTotal === 1 ? "" : "s") +
+      " · " + pct + "% · " + v.counts.High + " High / " + v.counts.Medium + " Med / " + v.counts.Low + " Low"));
+
+    panel.appendChild(mkSep("Workloads"));
+    var order = { High: 0, Medium: 1, Low: 2 };
+    // One row per workload this vendor touches (dedupe rels by workload).
+    var seen = {};
+    var rels = v.rels.filter(function(r) { if (seen[r.wl.id]) return false; seen[r.wl.id] = true; return true; });
+    // Merge roles across the (now-deduped) workloads.
+    var rolesByWl = {};
+    v.rels.forEach(function(r) {
+      (rolesByWl[r.wl.id] = rolesByWl[r.wl.id] || []).push.apply(rolesByWl[r.wl.id], r.roles);
+    });
+    rels.sort(function(a, b) { return (order[a.crit] || 0) - (order[b.crit] || 0); })
+      .forEach(function(r) {
+        panel.appendChild(renderWorkloadRow(r.wl, rolesByWl[r.wl.id] || []));
+      });
+    right.appendChild(panel);
   }
 
   function envLabelFor(inst) {
@@ -267,29 +349,15 @@ export function renderSummaryVendorCriticalityView(left, right, sessionArg) {
     return match ? getEnvLabel(match.id, liveSession) : inst.environmentId;
   }
 
-  function renderVendorDetail(row) {
-    right.innerHTML = "";
-    var panel = mk("div", "detail-panel");
-    panel.appendChild(mkt("div", "detail-title", row.vendor));
-    panel.appendChild(mkt("div", "detail-sub",
-      row.instances.length + " current instance" + (row.instances.length === 1 ? "" : "s") +
-      " · score " + trimScore(row.score)));
-    panel.appendChild(mkSep("Workloads & services"));
-    row.instances.forEach(function(inst) {
-      panel.appendChild(renderInstanceRow(inst, row));
-    });
-    right.appendChild(panel);
-  }
-
-  // Instance row with an editable criticality select; commits immediately
-  // and re-renders both the bubble chart (size/colour may shift) and the
-  // open vendor detail panel.
-  function renderInstanceRow(inst, row) {
+  // Workload row with its own editable criticality. Editing commits the
+  // WORKLOAD's criticality (the criticality that matters) and reflows.
+  function renderWorkloadRow(W, roles) {
     var rowEl = mk("div", "vc-inst-row");
     var label = mk("div", "vc-inst-label");
-    label.appendChild(mkt("span", "crit-shape-" + (inst.criticality || "Low").toLowerCase(), ""));
-    label.appendChild(document.createTextNode(" " + (inst.label || "(unnamed)")));
-    label.appendChild(mkt("span", "vc-inst-meta", layerLabel(inst.layerId) + " · " + envLabelFor(inst)));
+    label.appendChild(mk("span", "crit-shape-" + (W.criticality || "Low").toLowerCase()));
+    label.appendChild(document.createTextNode(" " + (W.label || "(unnamed)")));
+    var meta = roles.length ? roles.join(" · ") : envLabelFor(W);
+    label.appendChild(mkt("span", "vc-inst-meta", meta));
     rowEl.appendChild(label);
 
     var sel = mk("select", "form-select vc-crit-select");
@@ -297,123 +365,30 @@ export function renderSummaryVendorCriticalityView(left, right, sessionArg) {
       var o = document.createElement("option");
       o.value = opt;
       o.textContent = opt;
-      if (opt === inst.criticality) o.selected = true;
+      if (opt === W.criticality) o.selected = true;
       sel.appendChild(o);
     });
     sel.addEventListener("change", function() {
-      commitInstanceSetCriticality(inst.id, sel.value);
-      // Reporting tabs read a snapshot of the engagement (state/projection.js);
-      // re-derive it so the just-committed change is visible, unless an
-      // explicit sessionArg was supplied (caller owns that snapshot).
+      commitInstanceSetCriticality(W.id, sel.value);
       if (!sessionArg) liveSession = getEngagementAsSession();
       renderAll();
-      var freshRow = computeVendorRows().find(function(r) { return r.vendor === row.vendor; });
-      if (freshRow) renderVendorDetail(freshRow);
-      else showPlaceholder();
     });
     rowEl.appendChild(sel);
-
     return rowEl;
   }
 
   renderAll();
 }
 
-// ─── DOM helpers ─────────────────────────────────────────────────────────
+// ─── helpers ─────────────────────────────────────────────────────────────
 function mk(tag, cls) { var e = document.createElement(tag); if (cls) e.className = cls; return e; }
 function mkt(tag, cls, text) { var e = mk(tag, cls); e.textContent = text; return e; }
 function mkSep(text) { return mkt("div", "detail-sep", text); }
 
-var SVG_NS = "http://www.w3.org/2000/svg";
-function svgEl(tag, attrs) {
-  var e = document.createElementNS(SVG_NS, tag);
-  if (attrs) Object.keys(attrs).forEach(function(k) { e.setAttribute(k, attrs[k]); });
-  return e;
-}
-function svgText(text, attrs) {
-  var t = svgEl("text", Object.assign({ x: 0, "text-anchor": "middle", "dominant-baseline": "central",
-    "font-family": "Inter, system-ui, sans-serif" }, attrs || {}));
-  t.textContent = text;
-  return t;
-}
-
-// ─── Circle packing (front-chain, after Wang et al. / d3-hierarchy) ──────
-// Mutates each circle to add {x, y}. Centering is left to the caller's
-// bounding-box viewBox. Input should be sorted largest-first for a tight
-// cluster.
-function _Node(c) { this._ = c; this.next = null; this.prev = null; }
-
-function _place(b, a, c) {
-  var dx = b.x - a.x, x, a2,
-      dy = b.y - a.y, y, b2,
-      d2 = dx * dx + dy * dy;
-  if (d2) {
-    a2 = a.r + c.r; a2 *= a2;
-    b2 = b.r + c.r; b2 *= b2;
-    if (a2 > b2) {
-      x = (d2 + b2 - a2) / (2 * d2);
-      y = Math.sqrt(Math.max(0, b2 / d2 - x * x));
-      c.x = b.x - x * dx - y * dy;
-      c.y = b.y - x * dy + y * dx;
-    } else {
-      x = (d2 + a2 - b2) / (2 * d2);
-      y = Math.sqrt(Math.max(0, a2 / d2 - x * x));
-      c.x = a.x + x * dx - y * dy;
-      c.y = a.y + x * dy + y * dx;
-    }
-  } else {
-    c.x = a.x + c.r;
-    c.y = a.y;
-  }
-}
-
-function _intersects(a, b) {
-  var dr = a.r + b.r - 1e-6, dx = b.x - a.x, dy = b.y - a.y;
-  return dr > 0 && dr * dr > dx * dx + dy * dy;
-}
-
-function _score(node) {
-  var a = node._, b = node.next._,
-      ab = a.r + b.r,
-      dx = (a.x * b.r + b.x * a.r) / ab,
-      dy = (a.y * b.r + b.y * a.r) / ab;
-  return dx * dx + dy * dy;
-}
-
-function packCircles(circles) {
-  var n = circles.length;
-  if (n === 0) return;
-
-  var a = circles[0]; a.x = 0; a.y = 0;
-  if (n === 1) return;
-
-  var b = circles[1]; a.x = -b.r; b.x = a.r; b.y = 0;
-  if (n === 2) return;
-
-  var c = circles[2]; _place(b, a, c);
-
-  a = new _Node(a); b = new _Node(b); c = new _Node(c);
-  a.next = c.prev = b; b.next = a.prev = c; c.next = b.prev = a;
-
-  pack: for (var i = 3; i < n; ++i) {
-    _place(a._, b._, circles[i]); c = new _Node(circles[i]);
-    var j = b.next, k = a.prev, sj = b._.r, sk = a._.r;
-    do {
-      if (sj <= sk) {
-        if (_intersects(j._, c._)) { b = j; a.next = b; b.prev = a; --i; continue pack; }
-        sj += j._.r; j = j.next;
-      } else {
-        if (_intersects(k._, c._)) { a = k; a.next = b; b.prev = a; --i; continue pack; }
-        sk += k._.r; k = k.prev;
-      }
-    } while (j !== k.next);
-
-    c.prev = a; c.next = b; a.next = b.prev = b = c;
-    var aa = _score(a);
-    while ((c = c.next) !== b) {
-      var ca = _score(c);
-      if (ca < aa) { a = c; aa = ca; }
-    }
-    b = a.next;
-  }
+function textOn(hex) {
+  var c = hex.replace("#", "");
+  if (c.length === 3) c = c[0] + c[0] + c[1] + c[1] + c[2] + c[2];
+  var r = parseInt(c.slice(0, 2), 16), g = parseInt(c.slice(2, 4), 16), b = parseInt(c.slice(4, 6), 16);
+  var lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.62 ? "#1f2937" : "#ffffff";
 }

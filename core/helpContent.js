@@ -85,10 +85,10 @@ export const HELP_CONTENT = {
   reporting_vendor_criticality: {
     title: "Reporting — Vendor Criticality",
     body: [
-      "Each bubble is a vendor. Use 'Size by' and 'Colour by' to configure what the bubble encodes: criticality score or workload count for size; dominant criticality or vendor type for colour.",
-      "Score = sum of each vendor's current-instance criticality weights (High=2, Medium=1, Low=0.5) — the same scale the Heatmap tab uses. Dominant criticality = the highest severity present in any of that vendor's workloads.",
-      "Click a bubble to see all of that vendor's current workloads. Each one has its own Criticality dropdown that commits immediately and reflows the bubbles live.",
-      "Scoped to current state only — criticality is edited the same way it is on Tab 2 (Current State); desired-state items don't carry an independently-editable criticality."
+      "Workload-centric: the unit is the current business workload, not the servers/storage under it. A server isn't a workload — it's a server running one. So the bands are workloads by THEIR criticality: Critical (top), Medium, Low (bottom).",
+      "Each band is split by the vendors exposed to those workloads. A vendor relates to a workload by being its application vendor, or by supplying technology the workload is mapped to (its compute/storage/backup/etc.). Map a workload's stack in Current State to surface that underlying vendor lock-in.",
+      "The 'Vendor exposure from' chips pick which sources count: 'Business app' = the workload's own vendor; the others = the mapped underlying layers. Vendors keep one colour across all bands; the long tail collapses into 'Other'.",
+      "The right panel ranks vendors by how many workloads they're exposed to. Click a vendor (or a chart segment) to list those workloads — each with its own Criticality dropdown that commits immediately and reflows the bands. Current state only."
     ]
   },
 
