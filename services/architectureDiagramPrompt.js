@@ -61,23 +61,35 @@ export function buildArchitectureDiagramPrompt(session, visibleEnvs) {
 
   const envNames = envs.map(function(e) { return e.label; }).join(", ") || "(no environments)";
 
+  // ── Estate summary stats (for the bottom banner) ──────────────────────
+  const total    = current.length;
+  const dellCount = current.filter(function(i) { return i.vendorGroup === "dell"; }).length;
+  const pct = function(n) { return total > 0 ? Math.round((n / total) * 100) : 0; };
+  const dellPct    = pct(dellCount);
+  const nonDellPct = 100 - dellPct;
+  const highRisk   = current.filter(function(i) { return i.criticality === "High"; }).length;
+
   // ── Assemble the prompt ───────────────────────────────────────────────
   const lines = [
-    "Create a clean, professional current-state IT infrastructure architecture diagram for " + name + ".",
+    "Create a clean, professional current-state IT infrastructure architecture diagram for " + name + ", rendered as a polished executive-grade infographic.",
     "",
-    "STYLE:",
-    "  • Layered architecture diagram: horizontal bands stacked top-to-bottom, one band per layer.",
-    "  • Columns represent environments/sites; draw each environment as a labelled vertical column.",
-    "  • Each technology is a rounded rectangle tile placed in its layer band and environment column.",
-    "  • Colour tiles by vendor: Dell in blue, third-party in grey, custom/in-house in amber.",
-    "  • Use a subtle criticality cue (e.g. a left accent or border weight) for critical vs standard assets.",
-    "  • Neutral background, clear layer labels down the left edge, environment labels across the top.",
-    "  • Modern enterprise look, legible labels, balanced spacing — suitable for an executive slide.",
+    "VISUAL STYLE (match this exact look and feel):",
+    "  • Overall: crisp white background, modern enterprise infographic, generous whitespace, everything sharply aligned to a grid — suitable for a boardroom slide.",
+    "  • Colour system: deep navy blue (#123a75) as the primary/anchor colour, a lighter accent blue (#2f7dd1) for highlights, and each technology drawn in its real vendor brand colours.",
+    "  • Title: large bold navy heading centred across the top, e.g. \"" + name + " — AS-IS Current-State Architecture\", with the final word accented in the lighter blue.",
+    "  • Environment headers: draw each environment/site as its own vertical column with a solid navy-blue rounded header banner at the top, white uppercase label, and a small white glyph icon (data-center/building, disaster-recovery, cloud, etc.). Each column sits inside a light-grey rounded container that frames all of that environment's cells.",
+    "  • Layer labels: run the layer names down the LEFT edge as light-blue rounded pill badges, each with a small matching line icon (workloads, compute, virtualization, storage, data-protection, infrastructure).",
+    "  • Cells: at each layer × environment intersection, render the technologies as their actual VENDOR BRAND LOGOS / product icons in brand colour, with a short product-name caption in dark grey directly beneath each icon (e.g. Dell, Nutanix, VMware, Veeam, OpenText, Cisco, Palo Alto, Fortinet, Splunk, F5, Microsoft). Arrange icons neatly in rows within the cell.",
+    "  • Criticality / highlights: wrap notably high-risk or standout assets in a dashed AMBER-orange rounded border to draw the eye.",
+    "  • Cross-site relationships: draw dashed RED bidirectional arrows between matching cells in different sites to indicate replication / backup / failover links.",
+    "  • KEY OBSERVATIONS panel: add a narrow column on the far RIGHT titled \"KEY OBSERVATIONS\", listing short insight bullets, each paired with a small circular icon (e.g. fragmentation, dual-vendor sprawl, high-risk posture, limited cloud landing zone).",
+    "  • Bottom summary banner: a full-width solid navy rounded bar across the bottom labelled \"Current estate:\" showing headline metrics with small icons and pie-chart glyphs — \"" + total + " assets\", \"" + dellPct + "% Dell\", \"" + nonDellPct + "% non-Dell\", and a red warning icon reading \"high risk posture\".",
+    "  • Typography: clean sans-serif, bold uppercase for headers, legible captions, balanced spacing throughout.",
     "",
-    "LAYERS (top to bottom): " + LAYERS.map(function(l) { return l.label; }).join(" → "),
-    "ENVIRONMENTS (left to right columns): " + envNames,
+    "LAYERS (top to bottom, one horizontal band each): " + LAYERS.map(function(l) { return l.label; }).join(" → "),
+    "ENVIRONMENTS (left to right columns, each a framed vertical column with a navy header): " + envNames,
     "",
-    "LAYER CONTENTS (layer → environment → assets):",
+    "LAYER CONTENTS (layer → environment → assets to place as vendor-logo icons):",
     layerBlocks,
     ""
   ];
@@ -88,7 +100,9 @@ export function buildArchitectureDiagramPrompt(session, visibleEnvs) {
     lines.push("");
   }
 
-  lines.push("Label the diagram \"" + name + " — Current State Architecture\". Keep it accurate to the assets listed above; do not invent components.");
+  lines.push("ESTATE SUMMARY (use in the bottom banner): " + total + " total assets · " + dellPct + "% Dell · " + nonDellPct + "% non-Dell · " + highRisk + " high-criticality (high-risk posture).");
+  lines.push("");
+  lines.push("Label the diagram \"" + name + " — AS-IS Current-State Architecture\". Keep it strictly accurate to the assets listed above; do not invent components.");
 
   return lines.join("\n");
 }
