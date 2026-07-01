@@ -71,7 +71,9 @@ export function buildArchitectureDiagramPrompt(session, visibleEnvs) {
 
   // ── Assemble the prompt ───────────────────────────────────────────────
   const lines = [
-    "Create a clean, professional current-state IT infrastructure architecture diagram for " + name + ", rendered as a polished executive-grade infographic.",
+    "Generate an IMAGE — a rendered, raster picture of a clean, professional current-state IT infrastructure architecture diagram for " + name + ", styled as a polished executive-grade infographic.",
+    "",
+    "OUTPUT: Produce an actual generated image (a picture). Do NOT output SVG, HTML, Mermaid, ASCII art, or any code or markup — return the diagram as a rendered image only.",
     "",
     "VISUAL STYLE (match this exact look and feel):",
     "  • Overall: crisp white background, modern enterprise infographic, generous whitespace, everything sharply aligned to a grid — suitable for a boardroom slide.",
