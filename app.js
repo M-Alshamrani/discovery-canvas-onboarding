@@ -52,7 +52,7 @@ var REPORTING_TABS = [
   { id: "vendor",   label: "Vendor mix"    },
   { id: "vendorCrit", label: "Vendor criticality" },
   { id: "roadmap",  label: "Roadmap"       },
-  { id: "export",   label: "Export report" }
+  { id: "export",   label: "Export options" }
 ];
 
 var currentStep         = "context";

@@ -4201,6 +4201,36 @@ button { font-family: var(--font); cursor: pointer; border: none; border-radius:
   line-height: 1.5;
 }
 
+/* Export options — per-output cards + architecture prompt textarea */
+.er-option-card {
+  margin-top: 14px;
+}
+
+.er-option-card .er-section-list {
+  margin-top: 10px;
+}
+
+.er-arch-prompt {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 14px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-1);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.er-arch-prompt:focus-visible {
+  outline: 2px solid var(--dell-blue-soft);
+  outline-offset: 1px;
+  border-color: var(--dell-blue);
+}
+
 /* ── Overlay (v2.4.13 S3 Overlay.js) ─────────────────────────────
    Centered modal sister-component to Drawer.js. Used by AI Assist
    (S4) and v2.5.0 + Add flows. Backdrop blurs the page; panel sits

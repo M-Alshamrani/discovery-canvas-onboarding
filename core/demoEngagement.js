@@ -369,7 +369,6 @@ function buildDemoEngagement() {
     state: "current", layerId: "storage", environmentId: ENV_SITE1_ID,
     label: "Pure Storage Object – Site 1 (300 TB)", vendor: "Pure Storage", vendorGroup: "nonDell",
     criticality: "Medium", disposition: "replace",
-    endOfSaleDate: "2026-09-30", endOfSupportDate: "2027-09-30", endOfServiceLifeDate: "2028-09-30",
     notes: "~300 TB; ~110 TB in use; at least one node located at main site. Replace with PowerScale to unify the storage tier."
   });
   const instFileshareS1 = createEmptyInstance({
@@ -407,7 +406,6 @@ function buildDemoEngagement() {
     state: "current", layerId: "dataProtection", environmentId: ENV_SITE1_ID,
     label: "Veeam Backup & Replication – Site 1", vendor: "Veeam", vendorGroup: "nonDell",
     criticality: "High", disposition: "replace",
-    endOfSaleDate: "2027-03-31", endOfSupportDate: "2028-03-31", endOfServiceLifeDate: "2029-03-31",
     notes: "Backup software for VMs, GIS workloads, pictures, fileshares; policy TBC. Replace with PowerProtect Data Manager."
   });
   const instOpentextS1 = createEmptyInstance({
@@ -429,7 +427,6 @@ function buildDemoEngagement() {
     state: "current", layerId: "dataProtection", environmentId: ENV_SITE2_ID,
     label: "Veeam Backup & Replication – Site 2", vendor: "Veeam", vendorGroup: "nonDell",
     criticality: "High", disposition: "replace",
-    endOfSaleDate: "2027-06-30", endOfSupportDate: "2028-06-30", endOfServiceLifeDate: "2029-06-30",
     notes: "Backup software at DR site; backs up VMs, GIS workloads, fileshares; policy TBC. Replace with PowerProtect Data Manager."
   });
   const instOpentextS2 = createEmptyInstance({
@@ -931,6 +928,84 @@ function buildDemoEngagement() {
     instQualiexS2, instSplunkS2, instItsmS2, instMesamS2, instVpnGwAzure,
     instGisS1, instExchangeS1, instWebappsS1, instAppinS1, instVdigpuS2, instGisS2, instM365Azure
   ];
+
+  // ─── Demo lifecycle population (all current hardware/platform assets) ──
+  //
+  // Every current-state infrastructure asset is given deterministic
+  // end-of-sale / end-of-support / end-of-service-life dates so the Tech
+  // Refresh report has a clean, compelling story. Dates are anchored to a
+  // near-2026 window and authored as a realistic mixed-risk spread that
+  // computeLifecycleRisk() (services/healthMetrics.js) buckets as:
+  //   critical  — past end-of-service-life
+  //   high      — past end-of-support
+  //   elevated  — end-of-support within the next 180 days
+  //   healthy   — years of support remaining (no flag)
+  // The aging/expired assets are biased toward the legacy
+  // Nutanix / VMware / Pure platforms the modernization narrative already
+  // wants to collapse, so lifecycle risk reinforces the gap story.
+  //
+  // [endOfSaleDate, endOfSupportDate, endOfServiceLifeDate]
+  const LC = {
+    critA:   ["2019-06-30", "2023-06-30", "2025-03-31"],
+    critB:   ["2020-12-31", "2023-12-31", "2025-09-30"],
+    highA:   ["2021-09-30", "2025-03-31", "2027-06-30"],
+    highB:   ["2022-06-30", "2025-12-31", "2027-12-31"],
+    elevA:   ["2023-06-30", "2026-10-31", "2028-10-31"],
+    elevB:   ["2023-12-31", "2026-12-15", "2028-12-31"],
+    okA:     ["2026-03-31", "2029-12-31", "2031-12-31"],
+    okB:     ["2027-06-30", "2030-06-30", "2032-06-30"]
+  };
+  const LIFECYCLE_BY_ID = {
+    // Compute
+    [I_DELL_S1_ID]: LC.elevA, [I_NX_S1_ID]: LC.critA, [I_NX_S2_ID]: LC.critB,
+    [I_DELL_S2_ID]: LC.elevB, [I_NC2_AZURE_ID]: LC.okA,
+    // Virtualization
+    [I_VSPHERE_S1_ID]: LC.critA, [I_AHV_S1_ID]: LC.highA, [I_VSAN_S1_ID]: LC.critB,
+    [I_VSPHERE_S2_ID]: LC.critB, [I_AHV_S2_ID]: LC.highB, [I_VSAN_S2_ID]: LC.critA,
+    [I_AHV_NC2_AZURE_ID]: LC.okB,
+    // Storage
+    [I_NUTVM_S1_ID]: LC.highA, [I_NUTOBJ_S1_ID]: LC.highB, [I_PURE_S1_ID]: LC.highA,
+    [I_FILESHARE_S1_ID]: LC.elevA, [I_NUTVM_S2_ID]: LC.highB, [I_NUTOBJ_S2_ID]: LC.elevB,
+    // Data Protection
+    [I_DD_S1_ID]: LC.okA, [I_VEEAM_S1_ID]: LC.highA, [I_OPENTEXT_S1_ID]: LC.elevA,
+    [I_DDCRS_S2_ID]: LC.okB, [I_VEEAM_S2_ID]: LC.highB, [I_OPENTEXT_S2_ID]: LC.elevB,
+    // Infrastructure
+    [I_CISCONET_S1_ID]: LC.elevA, [I_DELLTOR_S1_ID]: LC.okA, [I_PALOALTO_S1_ID]: LC.elevB,
+    [I_FORTINET_S1_ID]: LC.highA, [I_CISCOISE_S1_ID]: LC.highB, [I_AD_S1_ID]: LC.okA,
+    [I_RIVERBED_S1_ID]: LC.critA, [I_MENCM_S1_ID]: LC.elevA, [I_F5_S1_ID]: LC.elevB,
+    [I_SPLUNK_S1_ID]: LC.okB, [I_ITSM_S1_ID]: LC.elevA, [I_MESAM_S1_ID]: LC.okA,
+    [I_CISCONET_S2_ID]: LC.elevB, [I_DELLTOR_S2_ID]: LC.okB, [I_PALOALTO_S2_ID]: LC.elevA,
+    [I_FORTINET_S2_ID]: LC.highB, [I_AD_S2_ID]: LC.okB, [I_INFOBLOX_S2_ID]: LC.elevA,
+    [I_QUALIEX_S2_ID]: LC.okA, [I_SPLUNK_S2_ID]: LC.okB, [I_ITSM_S2_ID]: LC.elevB,
+    [I_MESAM_S2_ID]: LC.okA, [I_VPNGW_AZURE_ID]: LC.okB
+  };
+  allCurrent.forEach(function(inst) {
+    const lc = LIFECYCLE_BY_ID[inst.id];
+    if (!lc) return;  // workloads / SaaS apps carry no hardware lifecycle dates
+    inst.endOfSaleDate        = lc[0];
+    inst.endOfSupportDate     = lc[1];
+    inst.endOfServiceLifeDate = lc[2];
+  });
+
+  // ─── Demo asset mapping (every current workload → the assets it uses) ──
+  //
+  // mappedAssetIds is schema-restricted to workload-layer instances. These
+  // links let the Architecture Diagram prompt describe real workload→asset
+  // dependencies across the layer stack.
+  const WORKLOAD_MAPPING = {
+    [I_GIS_S1_ID]:      [I_DELL_S1_ID, I_VSPHERE_S1_ID, I_NUTVM_S1_ID, I_DD_S1_ID, I_VEEAM_S1_ID],
+    [I_EXCHANGE_S1_ID]: [I_DELL_S1_ID, I_VSPHERE_S1_ID, I_NUTVM_S1_ID, I_DD_S1_ID],
+    [I_WEBAPPS_S1_ID]:  [I_NX_S1_ID, I_VSPHERE_S1_ID, I_NUTVM_S1_ID, I_PURE_S1_ID],
+    [I_APPIN_S1_ID]:    [I_NX_S1_ID, I_AHV_S1_ID, I_NUTOBJ_S1_ID],
+    [I_VDIGPU_S2_ID]:   [I_NX_S2_ID, I_AHV_S2_ID, I_NUTVM_S2_ID],
+    [I_GIS_S2_ID]:      [I_DELL_S2_ID, I_VSPHERE_S2_ID, I_NUTVM_S2_ID, I_DDCRS_S2_ID, I_VEEAM_S2_ID],
+    [I_M365_AZURE_ID]:  [I_NC2_AZURE_ID, I_AHV_NC2_AZURE_ID, I_VPNGW_AZURE_ID]
+  };
+  allCurrent.forEach(function(inst) {
+    const map = WORKLOAD_MAPPING[inst.id];
+    if (map) inst.mappedAssetIds = map;
+  });
+
   const allDesired = [
     desPrivateCloudS1, desPrivateCloudS2, desPowerScaleS1,
     desPpdmS1, desPpdmS2, desPpcrVaultS2,

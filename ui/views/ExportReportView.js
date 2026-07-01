@@ -8,6 +8,10 @@ import { getEngagementAsSession, getVisibleEnvsFromEngagement } from "../../stat
 import { LAYERS, BUSINESS_DRIVERS } from "../../core/config.js";
 import { buildProjects, computeDiscoveryCoverage, computeRiskPosture, generateSessionBrief } from "../../services/roadmapService.js";
 import { getHealthSummary, computeBucketMetrics, scoreToRiskLabel, scoreToClass, computeLifecycleRisk } from "../../services/healthMetrics.js";
+import { computeTechRefresh } from "../../services/techRefreshReport.js";
+import { buildArchitectureDiagramPrompt } from "../../services/architectureDiagramPrompt.js";
+import { loadAiConfig, isActiveProviderReady } from "../../core/aiConfig.js";
+import { chatCompletion } from "../../services/aiService.js";
 import { renderDemoBanner } from "../components/DemoBanner.js";
 
 // ── Entry point ────────────────────────────────────────────────────────────────
@@ -18,70 +22,284 @@ export function renderExportReportView(left, right) {
 
   var visibleEnvs = getVisibleEnvsFromEngagement();
 
-  // ── Preview panel (left) ───────────────────────────────────────────────────
+  // ── Header ──────────────────────────────────────────────────────────────────
   var headerCard = mk("div", "card");
   headerCard.innerHTML = [
     '<div class="card-title-row">',
-      '<div class="card-title">Export report</div>',
+      '<div class="card-title">Export options</div>',
     '</div>',
     '<div class="card-hint">',
-      'Generate a standalone HTML report — a full executive presentation of this engagement\'s ',
-      'infrastructure assessment, risks, roadmap, and vendor analytics. Opens in a new tab; ',
-      'use your browser\'s Print → Save as PDF to create a PDF artifact.',
-    '</div>',
-    '<div class="export-report-actions">',
-      '<button id="er-generate-btn" class="btn-primary er-generate-btn">',
-        '↗ Generate &amp; Open Report',
-      '</button>',
-      '<button id="er-download-btn" class="btn-secondary er-download-btn">',
-        '↓ Download HTML',
-      '</button>',
+      'Choose what to export. Each report is built live from this engagement\'s data and can be ',
+      'opened in a new tab, saved as a standalone HTML file, or exported directly as a PDF.',
     '</div>'
   ].join("");
   left.appendChild(headerCard);
 
-  // ── Sections preview list ──────────────────────────────────────────────────
-  var previewCard = mk("div", "card er-sections-card");
-  previewCard.innerHTML = [
-    '<div class="card-title">Report sections</div>',
-    '<div class="card-hint">Every section is auto-populated from your current session data.</div>',
+  // ── Option 1 · Full assessment report ───────────────────────────────────────
+  left.appendChild(buildOptionCard({
+    id:    "full",
+    title: "Full Assessment Report",
+    hint:  "The complete executive presentation — infrastructure assessment, vendor analytics, heatmap, risks, roadmap, and session brief.",
+    sections: [
+      ["Executive Header", "Customer name, KPI summary bar, date, and prepared-by metadata"],
+      ["Overview Dashboard", "Vendor mix, Dell vs non-Dell by environment, category snapshot"],
+      ["Site / Environment Breakdown", "Per-environment asset counts and key observations"],
+      ["Full Asset Inventory", "All instances by environment, layer, vendor, and status"],
+      ["Heatmap", "Layer × environment risk matrix"],
+      ["Risks & Gaps", "Confirmed risks, data-quality gaps, opportunity themes"],
+      ["Strategic Roadmap", "Now / Next / Later phased project cards"],
+      ["Session Brief", "Scannable executive roll-up"]
+    ],
+    build: function() { return buildReportHTML(session, visibleEnvs); },
+    filename: function() { return buildFilename(session); }
+  }));
+
+  // ── Option 2 · Tech Refresh report ───────────────────────────────────────────
+  left.appendChild(buildOptionCard({
+    id:    "techrefresh",
+    title: "Tech Refresh Report",
+    hint:  "Where the customer stands on hardware lifecycle — what is aging, what is out of support, and what must be refreshed and when.",
+    sections: [
+      ["Lifecycle Summary", "Support coverage, at-risk count, and refresh posture at a glance"],
+      ["Refresh Roadmap", "Every asset with end-of-sale / support / service-life dates, timing, and recommended action"],
+      ["Aging by Layer & Environment", "Where lifecycle risk concentrates across the estate"]
+    ],
+    build: function() { return buildTechRefreshHTML(session, visibleEnvs); },
+    filename: function() { return buildFilename(session, "tech-refresh"); }
+  }));
+
+  // ── Option 3 · Architecture diagram prompt ───────────────────────────────────
+  left.appendChild(buildArchitecturePromptCard(session, visibleEnvs));
+
+  // ── Data snapshot (right) ────────────────────────────────────────────────────
+  renderDataSnapshot(right, session, visibleEnvs);
+}
+
+// ── Reusable export-option card (HTML / PDF / open) ──────────────────────────
+
+function buildOptionCard(opt) {
+  var card = mk("div", "card er-option-card");
+  card.innerHTML = [
+    '<div class="card-title">' + esc(opt.title) + '</div>',
+    '<div class="card-hint">' + esc(opt.hint) + '</div>',
     '<div class="er-section-list">',
-      sectionItem("1", "Executive Header", "Customer name, KPI summary bar, date, and prepared-by metadata"),
-      sectionItem("2", "Overview Dashboard", "Vendor mix donut chart, Dell vs non-Dell stacked bars, category snapshot, software platforms"),
-      sectionItem("3", "Site / Environment Breakdown", "Per-environment asset counts, compute and storage detail, key observations"),
-      sectionItem("4", "Full Asset Inventory Table", "All instances by environment, layer, vendor, and status"),
-      sectionItem("5", "Heatmap", "Layer × environment risk matrix with scoring and status indicators"),
-      sectionItem("6", "Risks & Gaps", "Confirmed risks ranked by severity, data quality gaps, opportunity themes"),
-      sectionItem("7", "Strategic Roadmap", "Now / Next / Later phased project cards with Dell solutions and initiative counts"),
-      sectionItem("8", "Session Brief", "Scannable executive roll-up — customer, drivers, risk, coverage, pipeline"),
+      opt.sections.map(function(s, i) { return sectionItem(String(i + 1), s[0], s[1]); }).join(""),
+    '</div>',
+    '<div class="export-report-actions">',
+      '<button class="btn-primary er-generate-btn" data-act="open">↗ Generate &amp; Open</button>',
+      '<button class="btn-secondary er-download-btn" data-act="html">↓ Export HTML</button>',
+      '<button class="btn-secondary er-download-btn" data-act="pdf">↓ Export PDF</button>',
     '</div>'
   ].join("");
-  left.appendChild(previewCard);
 
-  // ── Data snapshot (right) ──────────────────────────────────────────────────
-  renderDataSnapshot(right, session, visibleEnvs);
-
-  // ── Wire buttons ───────────────────────────────────────────────────────────
-  document.getElementById("er-generate-btn").addEventListener("click", function() {
-    var html = buildReportHTML(session, visibleEnvs);
-    var blob = new Blob([html], { type: "text/html" });
-    var url  = URL.createObjectURL(blob);
-    window.open(url, "_blank");
-    setTimeout(function() { URL.revokeObjectURL(url); }, 30000);
+  card.querySelector('[data-act="open"]').addEventListener("click", function() {
+    openHtmlInTab(opt.build());
   });
+  card.querySelector('[data-act="html"]').addEventListener("click", function() {
+    downloadHtml(opt.build(), opt.filename() + ".html");
+  });
+  card.querySelector('[data-act="pdf"]').addEventListener("click", function(ev) {
+    var btn = ev.currentTarget;
+    var prev = btn.textContent;
+    btn.disabled = true; btn.textContent = "Generating PDF…";
+    htmlToPdf(opt.build(), opt.filename() + ".pdf")
+      .catch(function(e) { window.alert("PDF export failed: " + (e && e.message ? e.message : e)); })
+      .then(function() { btn.disabled = false; btn.textContent = prev; });
+  });
+  return card;
+}
 
-  document.getElementById("er-download-btn").addEventListener("click", function() {
-    var html = buildReportHTML(session, visibleEnvs);
-    var blob = new Blob([html], { type: "text/html" });
-    var a    = document.createElement("a");
-    a.href   = URL.createObjectURL(blob);
-    a.download = buildFilename(session);
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(function() {
-      document.body.removeChild(a);
-      URL.revokeObjectURL(a.href);
-    }, 1000);
+// ── Architecture-diagram prompt card ─────────────────────────────────────────
+
+function buildArchitecturePromptCard(session, visibleEnvs) {
+  var promptText = buildArchitectureDiagramPrompt(session, visibleEnvs);
+
+  var card = mk("div", "card er-option-card");
+  card.innerHTML = [
+    '<div class="card-title">Generate Architecture Diagram</div>',
+    '<div class="card-hint">',
+      'A ready-to-use prompt describing the current-state estate as a layered architecture diagram ',
+      '(layers × environments, vendor-coloured tiles, workload→asset links). Copy it into any ',
+      'image-capable LLM to produce the current-state architecture picture.',
+    '</div>',
+    '<textarea id="er-arch-prompt" class="er-arch-prompt" rows="14" spellcheck="false"></textarea>',
+    '<div class="export-report-actions">',
+      '<button class="btn-primary er-generate-btn" data-act="copy">⧉ Copy Prompt</button>',
+      '<button class="btn-secondary er-download-btn" data-act="refine">✨ Refine with AI</button>',
+      '<button class="btn-secondary er-download-btn" data-act="reset">↺ Reset</button>',
+    '</div>'
+  ].join("");
+
+  var ta = card.querySelector("#er-arch-prompt");
+  ta.value = promptText;
+
+  card.querySelector('[data-act="copy"]').addEventListener("click", function(ev) {
+    var btn = ev.currentTarget; var prev = btn.textContent;
+    copyText(ta.value).then(function() {
+      btn.textContent = "✓ Copied"; setTimeout(function() { btn.textContent = prev; }, 1500);
+    });
+  });
+  card.querySelector('[data-act="reset"]').addEventListener("click", function() {
+    ta.value = buildArchitectureDiagramPrompt(session, visibleEnvs);
+  });
+  card.querySelector('[data-act="refine"]').addEventListener("click", function(ev) {
+    refineArchPrompt(ev.currentTarget, ta);
+  });
+  return card;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Output helpers — open / download HTML, clipboard, PDF, AI refine
+// ─────────────────────────────────────────────────────────────────────────────
+
+function openHtmlInTab(html) {
+  var blob = new Blob([html], { type: "text/html" });
+  var url  = URL.createObjectURL(blob);
+  window.open(url, "_blank");
+  setTimeout(function() { URL.revokeObjectURL(url); }, 30000);
+}
+
+function downloadHtml(html, filename) {
+  var blob = new Blob([html], { type: "text/html" });
+  var a    = document.createElement("a");
+  a.href   = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  setTimeout(function() {
+    document.body.removeChild(a);
+    URL.revokeObjectURL(a.href);
+  }, 1000);
+}
+
+function copyText(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    return navigator.clipboard.writeText(text).catch(function() { return legacyCopy(text); });
+  }
+  return Promise.resolve(legacyCopy(text));
+}
+
+function legacyCopy(text) {
+  var ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  try { document.execCommand("copy"); } catch (e) { /* noop */ }
+  document.body.removeChild(ta);
+}
+
+// Lazy-load the html2pdf bundle (UMD → window.html2pdf) once. Tries the
+// vendored copy first (works fully offline); if that file isn't present
+// (e.g. a checkout that didn't include the large binary), falls back to a
+// pinned CDN build. Either way html2pdf is attached to window.
+var _html2pdfPromise = null;
+var HTML2PDF_SOURCES = [
+  "./vendor/html2pdf/html2pdf.bundle.min.js",
+  "https://unpkg.com/html2pdf.js@0.10.3/dist/html2pdf.bundle.min.js"
+];
+function loadHtml2Pdf() {
+  if (typeof window !== "undefined" && window.html2pdf) return Promise.resolve(window.html2pdf);
+  if (_html2pdfPromise) return _html2pdfPromise;
+  _html2pdfPromise = HTML2PDF_SOURCES.reduce(function(chain, src) {
+    return chain.catch(function() { return loadScript(src); });
+  }, Promise.reject())
+    .then(function() {
+      if (window.html2pdf) return window.html2pdf;
+      throw new Error("html2pdf failed to initialise");
+    });
+  return _html2pdfPromise;
+}
+
+function loadScript(src) {
+  return new Promise(function(resolve, reject) {
+    var s = document.createElement("script");
+    s.src = src;
+    s.onload = function() { window.html2pdf ? resolve(window.html2pdf) : reject(new Error("no html2pdf on " + src)); };
+    s.onerror = function() { reject(new Error("could not load " + src)); };
+    document.head.appendChild(s);
+  });
+}
+
+// Render a full standalone report HTML string to a downloaded PDF. The
+// report documents are tab-based for screen; for PDF we mount them in an
+// off-screen iframe, force every panel visible, hide the tab nav, and let
+// html2pdf (html2canvas + jsPDF) paginate the continuous content.
+function htmlToPdf(html, filename) {
+  return loadHtml2Pdf().then(function() {
+    return new Promise(function(resolve, reject) {
+      var iframe = document.createElement("iframe");
+      iframe.style.position = "fixed";
+      iframe.style.left   = "-10000px";
+      iframe.style.top    = "0";
+      iframe.style.width  = "1180px";
+      iframe.style.height = "1000px";
+      iframe.style.border = "0";
+      document.body.appendChild(iframe);
+
+      var cleanup = function() { if (iframe.parentNode) iframe.parentNode.removeChild(iframe); };
+      var doc = iframe.contentDocument;
+      doc.open(); doc.write(html); doc.close();
+
+      var run = function() {
+        try {
+          doc.querySelectorAll(".rpt-pnl").forEach(function(p) { p.style.display = "block"; });
+          var tabs = doc.querySelector(".rpt-tabs"); if (tabs) tabs.style.display = "none";
+
+          window.html2pdf().set({
+            margin:      [8, 8, 10, 8],
+            filename:    filename,
+            image:       { type: "jpeg", quality: 0.96 },
+            html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ECF1F7", windowWidth: 1180 },
+            jsPDF:       { unit: "mm", format: "a4", orientation: "portrait" },
+            pagebreak:   { mode: ["css", "legacy"] }
+          }).from(doc.body).save()
+            .then(function() { cleanup(); resolve(); })
+            .catch(function(e) { cleanup(); reject(e); });
+        } catch (e) { cleanup(); reject(e); }
+      };
+
+      // Give web fonts + layout a beat before rasterising.
+      if (doc.fonts && doc.fonts.ready) {
+        doc.fonts.ready.then(function() { setTimeout(run, 350); });
+      } else {
+        setTimeout(run, 700);
+      }
+    });
+  });
+}
+
+// Optionally polish the architecture-diagram prompt via the configured AI
+// provider. Degrades gracefully when no provider is set up.
+function refineArchPrompt(btn, ta) {
+  var cfg = loadAiConfig();
+  if (!isActiveProviderReady(cfg)) {
+    window.alert("No AI provider is configured. Set one up via the gear icon → AI settings to use Refine with AI.");
+    return;
+  }
+  var providerKey = cfg.activeProvider;
+  var p = cfg.providers[providerKey] || {};
+  var prev = btn.textContent;
+  btn.disabled = true; btn.textContent = "Refining…";
+
+  chatCompletion({
+    providerKey:    providerKey,
+    baseUrl:        p.baseUrl,
+    model:          p.model,
+    fallbackModels: p.fallbackModels || [],
+    apiKey:         p.apiKey || "",
+    maxTokens:      1500,
+    messages: [
+      { role: "system", content: "You refine image-generation prompts for architecture diagrams. Improve clarity, structure, and visual direction. Preserve every technology, layer, environment, and dependency exactly as given — never add or remove components. Return only the improved prompt text, no commentary." },
+      { role: "user", content: ta.value }
+    ]
+  }).then(function(res) {
+    if (res && res.text && res.text.trim()) ta.value = res.text.trim();
+    btn.disabled = false; btn.textContent = prev;
+  }).catch(function(e) {
+    window.alert("Refine failed: " + (e && e.message ? e.message : e));
+    btn.disabled = false; btn.textContent = prev;
   });
 }
 
@@ -200,12 +418,157 @@ function buildReportHTML(session, visibleEnvs) {
 // HTML block builders
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildHead(customerName) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Tech Refresh report — standalone HTML document (lifecycle / refresh story)
+// ─────────────────────────────────────────────────────────────────────────────
+
+function buildTechRefreshHTML(session, visibleEnvs) {
+  var tr   = computeTechRefresh(session, visibleEnvs);
+  var cust = session.customer || {};
+  var customerName = (cust.name && cust.name.trim()) || "Customer";
+  var dateStr = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
+
+  return [
+    "<!DOCTYPE html>",
+    "<html lang=\"en\">",
+    buildHead(customerName, "Technology Refresh Report"),
+    "<body>",
+    buildTechRefreshHeader(customerName, cust, tr, dateStr),
+    "<div class=\"rpt-pnl on\" style=\"display:block\">",
+      buildTechRefreshSummary(tr),
+      buildTechRefreshRoadmap(tr),
+      buildTechRefreshBreakdown(tr),
+    "</div>",
+    "</body>",
+    "</html>"
+  ].join("\n");
+}
+
+function buildTechRefreshHeader(customerName, cust, tr, dateStr) {
+  var vertical = (cust.vertical && cust.vertical !== "—") ? " · " + esc(cust.vertical) : "";
+  var region   = (cust.region   && cust.region   !== "—") ? " · " + esc(cust.region)   : "";
+  return [
+    "<header class=\"rpt-hdr\">",
+      "<div class=\"rpt-hdr-inner\">",
+        "<div class=\"rpt-hdr-left\">",
+          "<div class=\"rpt-eyebrow\">Discovery Canvas · Technology Refresh Report</div>",
+          "<h1 class=\"rpt-title\">" + esc(customerName) + "</h1>",
+          "<div class=\"rpt-sub\">Prepared by Dell Technologies · " + esc(dateStr) + vertical + region + "</div>",
+        "</div>",
+        "<div class=\"rpt-kpis\">",
+          rptKpi(tr.total,                "Current Assets",   "info"),
+          rptKpi(tr.atRiskTotal,          "At Lifecycle Risk", tr.atRiskTotal > 0 ? "warn" : "ok"),
+          rptKpi(tr.refreshNow.length,    "Refresh Now",       tr.refreshNow.length > 0 ? "warn" : "ok"),
+          rptKpi(tr.supportCoveragePct + "%", "Support Coverage", tr.supportCoveragePct >= 60 ? "ok" : "warn"),
+        "</div>",
+      "</div>",
+    "</header>"
+  ].join("\n");
+}
+
+function buildTechRefreshSummary(tr) {
+  var s = tr.bySeverity;
+  var kpiGrid = [
+    rptKpiCard(s.critical, "Past Service Life", "Critical — refresh immediately", "#DC2626"),
+    rptKpiCard(s.high,     "Out of Support",    "High — unsupported assets",       "#EA580C"),
+    rptKpiCard(s.elevated, "Support Expiring",  "Elevated — within 12 months",     "#D97706"),
+    rptKpiCard(s.none,     "Within Support",    "Healthy or untracked",            "#16A34A"),
+    rptKpiCard(tr.trackedCoveragePct + "%", "Lifecycle Tracked", tr.tracked + " of " + tr.total + " assets", coverageCls(tr.trackedCoveragePct))
+  ].join("");
+
+  return [
+    "<div class=\"rpt-sh\">Lifecycle Summary</div>",
+    "<div class=\"rpt-g5\">" + kpiGrid + "</div>",
+    "<div class=\"rpt-obs-bar\">",
+      tr.atRiskTotal === 0
+        ? "All tracked assets are within their vendor support window. No immediate refresh action required."
+        : esc(tr.refreshNow.length + " asset" + (tr.refreshNow.length !== 1 ? "s" : "") +
+            " need immediate refresh (out of support or past end of service life); " +
+            tr.refreshSoon.length + " more " + (tr.refreshSoon.length === 1 ? "is" : "are") +
+            " approaching end of support within the next 12 months."),
+    "</div>"
+  ].join("\n");
+}
+
+function buildTechRefreshRoadmap(tr) {
+  if (tr.rows.length === 0) {
+    return "<div class=\"rpt-sh\">Refresh Roadmap</div><div class=\"rpt-card rpt-empty\">No current-state assets to assess.</div>";
+  }
+  var sevCls = { critical: "high", high: "high", elevated: "medium", none: "low" };
+  var sevLabel = { critical: "Critical", high: "High", elevated: "Elevated", none: "OK" };
+
+  var body = tr.rows.map(function(r) {
+    var timing = r.eosDays !== null
+      ? (Math.abs(r.eosDays) + "d " + (r.eosDays < 0 ? "ago" : "out"))
+      : "—";
+    return [
+      "<tr>",
+        "<td class=\"rpt-fw6\">" + esc(r.label) + "</td>",
+        "<td>" + esc(r.envLabel) + "</td>",
+        "<td>" + esc(r.layerLabel) + "</td>",
+        "<td>" + esc(r.vendor) + "</td>",
+        "<td>" + esc(r.endOfSupportDate || "—") + "</td>",
+        "<td>" + esc(r.endOfServiceLifeDate || "—") + "</td>",
+        "<td>" + esc(timing) + "</td>",
+        "<td><span class=\"rpt-urg rpt-urg-" + sevCls[r.severity] + "\">" + esc(sevLabel[r.severity]) + "</span></td>",
+        "<td>" + esc(r.action) + "</td>",
+      "</tr>"
+    ].join("");
+  }).join("");
+
+  return [
+    "<div class=\"rpt-sh\">Refresh Roadmap</div>",
+    "<div class=\"rpt-tbl-wrap\">",
+      "<table class=\"rpt-at\">",
+        "<thead><tr>",
+          "<th>Asset</th><th>Environment</th><th>Layer</th><th>Vendor</th>",
+          "<th>End of Support</th><th>End of Service Life</th><th>Timing</th><th>Risk</th><th>Recommended Action</th>",
+        "</tr></thead>",
+        "<tbody>" + body + "</tbody>",
+      "</table>",
+    "</div>"
+  ].join("\n");
+}
+
+function buildTechRefreshBreakdown(tr) {
+  var barRow = function(b) {
+    var p = b.total ? Math.round((b.atRisk / b.total) * 100) : 0;
+    var col = p >= 66 ? "#DC2626" : p >= 33 ? "#D97706" : "#16A34A";
+    return [
+      "<div class=\"rpt-hbl-row\">",
+        "<div class=\"rpt-hbl-meta\">",
+          "<span class=\"rpt-hbl-name\">" + esc(b.label) + "</span>",
+          "<span class=\"rpt-hbl-ct\">" + b.atRisk + " / " + b.total + " at risk</span>",
+        "</div>",
+        "<div class=\"rpt-hbt\">",
+          "<div class=\"rpt-hbf\" style=\"width:" + p + "%;background:" + col + "\"></div>",
+        "</div>",
+      "</div>"
+    ].join("");
+  };
+
+  return [
+    "<div class=\"rpt-sh\">Aging by Layer &amp; Environment</div>",
+    "<div class=\"rpt-g2\">",
+      "<div class=\"rpt-card\">",
+        "<div class=\"rpt-ct\">Lifecycle Risk by Layer</div>",
+        "<div class=\"rpt-hbl\">" + (tr.byLayer.map(barRow).join("") || "<div class=\"rpt-empty\">No data.</div>") + "</div>",
+      "</div>",
+      "<div class=\"rpt-card\">",
+        "<div class=\"rpt-ct\">Lifecycle Risk by Environment</div>",
+        "<div class=\"rpt-hbl\">" + (tr.byEnvironment.map(barRow).join("") || "<div class=\"rpt-empty\">No data.</div>") + "</div>",
+      "</div>",
+    "</div>"
+  ].join("\n");
+}
+
+function buildHead(customerName, reportLabel) {
+  var label = reportLabel || "Infrastructure Assessment Report";
   return [
     "<head>",
     "<meta charset=\"UTF-8\">",
     "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1.0\">",
-    "<title>" + esc(customerName) + " – Infrastructure Assessment Report</title>",
+    "<title>" + esc(customerName) + " – " + esc(label) + "</title>",
     "<link href=\"https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap\" rel=\"stylesheet\">",
     "<style>",
     buildCSS(),
@@ -1506,10 +1869,12 @@ function buildCSS() {
 // Utility
 // ─────────────────────────────────────────────────────────────────────────────
 
-function buildFilename(session) {
+// Returns a base filename (no extension). Callers append ".html" / ".pdf".
+function buildFilename(session, kind) {
   var name = (session.customer && session.customer.name || "customer").replace(/\s+/g, "-").toLowerCase();
   var date = new Date().toISOString().slice(0, 10);
-  return "discovery-canvas-report-" + name + "-" + date + ".html";
+  var slug = kind ? ("-" + kind) : "";
+  return "discovery-canvas-report" + slug + "-" + name + "-" + date;
 }
 
 function pct(val, total) {
