@@ -49,6 +49,24 @@ dropdown** per provider — Anthropic and Gemini list their known models, with a
 for anything else; the local / self-hosted providers stay free-text. A saved model that is not in
 the list is kept (shown under "Custom…"), never lost.
 
+### 4. Imported assets landed on the wrong layer  — FIXED
+**What you saw:** Importing a Dell-internal-LLM response into the Current state tab sometimes
+placed assets on the wrong layer — for example, a backup target (DataDomain) or a tape library
+landed on `storage` instead of `dataProtection`.
+
+**Why:** The import-instructions document (`services/importInstructionsBuilder.js`) that gets
+pasted into the LLM session didn't clearly distinguish layer boundaries that look similar:
+software-defined storage (vSAN, Storage Spaces Direct) vs. hardware `compute`/`storage`, and
+general-purpose `storage` vs. purpose-built `dataProtection` (backup, replication, DR targets).
+Without a precise glossary, the LLM guessed, and guessed wrong on the storage/dataProtection
+boundary in particular.
+
+**Fix:** the instructions now spell out all six layers with a glossary and worked examples that
+call out the two splits that most often get miscalled — software (`virtualization`) vs. hardware
+(`compute`), and general storage (`storage`) vs. purpose-built backup/replication/recovery
+(`dataProtection`) — plus a verification checklist the LLM runs over its own JSON before
+returning it.
+
 ### Drag-and-drop itself works
 HTML5 drag-and-drop on the Gaps kanban is functional: dragging a card between the Now / Next /
 Later columns moves the gap to that phase and saves it. The "drag-and-drop doesn't work" report was

@@ -11,35 +11,42 @@
 // stable and deeply diff-able.
 //
 // ─── Narrative ──────────────────────────────────────────────────────
-// Customer: Northstar Health Network (regional healthcare provider,
-//           ~12K employees, multi-site hospital + outpatient clinic
-//           + cloud workloads, HIPAA regulated).
+// Customer: Meridian Heritage Development Authority (MHDA) — a FICTIONAL
+//           public-sector authority overseeing a heritage, tourism, and
+//           urban development mega-project. Entirely synthetic; any
+//           resemblance to a real organization is coincidental.
 //
-// 4 strategic drivers — each woven into the gap → Dell solution
-// narrative for an executive audience:
-//   1. Cyber Resilience (High) — HIPAA + ransomware defense.
-//      → PowerProtect DD9410 + Cyber Recovery Vault + APEX Backup.
-//   2. Modernize Aging Infrastructure (High) — replace EOL HPE/NetApp.
-//      → PowerEdge R770 + PowerStore 1200T (replace HPE + NetApp).
-//   3. AI & Data Platforms (High) — radiology AI + clinical analytics.
-//      → PowerEdge XE9680 GPU + PowerScale F210 + GCP burst.
-//   4. Cost Optimization (Medium) — reduce TCO + cloud sprawl.
-//      → VxRail VD-4000 branch consolidation + CloudIQ unified ops.
+// Current-state instances (54) are a hand-authored, representative estate
+// across three environments: a main data center (Site 1), a DR site
+// (Site 2), and an early-stage Azure NC2 landing zone. Disposition,
+// drivers, desired-state Dell solutions, and gaps are authored on top of
+// that estate to tell an executive-friendly modernization story.
 //
-// 4 environments:
-//   1. Main Data Center (coreDc) — primary on-prem
-//   2. DR Site (drDc) — disaster recovery, warm standby
-//   3. Branch Clinic (edge) — outpatient site
-//   4. Google Cloud / GCP (publicCloud) — analytics + DR egress
+// 4 strategic drivers:
+//   1. Modernize Aging Infrastructure (High) — collapse the parallel
+//      Dell/Nutanix/VMware compute+virt stack and the three-way storage
+//      split (vSAN / Nutanix / Pure) onto one Dell platform.
+//      → Dell Private Cloud (PowerFlex) + PowerScale.
+//   2. Cyber Resilience (High) — Veeam policy is "TBC" at both sites;
+//      Exchange has no documented DR copy (GIS does).
+//      → PowerProtect Data Manager + Cyber Recovery Vault.
+//   3. Cloud Strategy (Medium) — Azure NC2 landing zone has 4 nodes and
+//      zero workloads; decide the hybrid platform before it fills up.
+//      → Dell APEX Cloud Services pilot.
+//   4. Operational Simplicity (Medium) — console sprawl across
+//      ManageEngine, ITSM Remedy, Qualiex, Splunk, F5, and per-vendor
+//      HCI tools.
+//      → CloudIQ + Dell APEX AIOps.
 //
-// Current + desired instances span Dell + non-Dell + custom vendor groups
-// so the vendor-mix selector tells a story (current ≈ 25% Dell density →
-// desired ≈ 90% Dell).
+// 3 environments:
+//   1. Main Data Center (coreDc) — Site 1, primary on-prem
+//   2. DR Site (drDc) — Site 2, disaster recovery
+//   3. Azure (publicCloud) — Nutanix NC2 landing zone + M365 SaaS
 //
-// 8 gaps cover all 5 gap types and all 4 drivers. Most are
-// origin="autoDraft" (generated from desired-state dispositions); the HIPAA
-// tabletop ops gap is origin="manual". Two gaps are left unreviewed to
-// showcase the review workflow.
+// 9 gaps cover all 5 gap types (replace, consolidate, introduce, ops,
+// enhance) and all 4 drivers. 7 origin="autoDraft" + 1 origin="manual"
+// (the GIS DR-drill ops gap, authored directly via "+ Add gap"). Two
+// gaps are left unreviewed to showcase the review workflow.
 //
 // Build-time guarantee: the EngagementSchema.parse call at the bottom of
 // this file runs at import time. If the demo drifts out of schema
@@ -66,89 +73,107 @@ import { createEmptyGap }         from "../schema/gap.js";
 const ENGAGEMENT_ID = "00000000-0000-4000-8000-000100000001";
 
 // Drivers (4)
-const DRIVER_CYBER_ID      = "00000000-0000-4000-8000-00d100000001";
-const DRIVER_MODERNIZE_ID  = "00000000-0000-4000-8000-00d100000002";
-const DRIVER_AI_ID         = "00000000-0000-4000-8000-00d100000003";
-const DRIVER_COST_ID       = "00000000-0000-4000-8000-00d100000004";
+const DRIVER_MODERNIZE_ID = "00000000-0000-4000-8000-00d100000001";
+const DRIVER_CYBER_ID     = "00000000-0000-4000-8000-00d100000002";
+const DRIVER_CLOUD_ID     = "00000000-0000-4000-8000-00d100000003";
+const DRIVER_OPS_ID       = "00000000-0000-4000-8000-00d100000004";
 
-// Environments (4)
-const ENV_MAIN_ID    = "00000000-0000-4000-8000-00e100000001";   // Main Data Center
-const ENV_DR_ID      = "00000000-0000-4000-8000-00e100000002";   // DR Site
-const ENV_BRANCH_ID  = "00000000-0000-4000-8000-00e100000003";   // Branch Clinic
-const ENV_GCP_ID     = "00000000-0000-4000-8000-00e100000004";   // Google Cloud (GCP)
+// Environments (3)
+const ENV_SITE1_ID = "00000000-0000-4000-8000-00e100000001";   // Main DC — Site 1
+const ENV_SITE2_ID = "00000000-0000-4000-8000-00e100000002";   // DR Site — Site 2
+const ENV_AZURE_ID = "00000000-0000-4000-8000-00e100000003";   // Azure (NC2 landing zone)
 
-// ─── Current-state instances ─────────────────────────────────────────
-// Workloads (5)
-const I_EHR_ID            = "00000000-0000-4000-8000-00f100000001";  // workload (EHR, Main DC)
-const I_PACS_ID           = "00000000-0000-4000-8000-00f100000002";  // workload (PACS imaging, Main DC)
-const I_ANALYTICS_ID      = "00000000-0000-4000-8000-00f100000003";  // workload (clinical analytics, Main DC)
-const I_PATIENT_PORTAL_ID = "00000000-0000-4000-8000-00f100000004";  // workload (patient portal, Branch Clinic)
-const I_RAD_AI_ID         = "00000000-0000-4000-8000-00f100000005";  // workload (Radiology AI, current = empty placeholder)
+// ─── Current-state instances (54, ported from the discovery import) ──
+// Compute (5)
+const I_DELL_S1_ID   = "00000000-0000-4000-8000-00f100000010";
+const I_NX_S1_ID     = "00000000-0000-4000-8000-00f100000011";
+const I_NX_S2_ID     = "00000000-0000-4000-8000-00f100000012";
+const I_DELL_S2_ID   = "00000000-0000-4000-8000-00f100000013";
+const I_NC2_AZURE_ID = "00000000-0000-4000-8000-00f100000014";
 
-// Compute (4)
-const I_HPE_MAIN_ID    = "00000000-0000-4000-8000-00f100000010";  // compute (HPE ProLiant DL380, Main DC)
-const I_HPE_DR_ID      = "00000000-0000-4000-8000-00f100000011";  // compute (HPE ProLiant DL380, DR)
-const I_CISCO_UCS_ID   = "00000000-0000-4000-8000-00f100000012";  // compute (Cisco UCS B-Series, Main DC)
-const I_LENOVO_BRANCH_ID = "00000000-0000-4000-8000-00f100000013";  // compute (Lenovo ThinkSystem, Branch Clinic)
+// Virtualization (7)
+const I_VSPHERE_S1_ID   = "00000000-0000-4000-8000-00f100000020";
+const I_AHV_S1_ID       = "00000000-0000-4000-8000-00f100000021";
+const I_VSAN_S1_ID      = "00000000-0000-4000-8000-00f100000022";
+const I_VSPHERE_S2_ID   = "00000000-0000-4000-8000-00f100000023";
+const I_AHV_S2_ID       = "00000000-0000-4000-8000-00f100000024";
+const I_VSAN_S2_ID      = "00000000-0000-4000-8000-00f100000025";
+const I_AHV_NC2_AZURE_ID= "00000000-0000-4000-8000-00f100000026";
 
-// Storage (3)
-const I_NETAPP_MAIN_ID = "00000000-0000-4000-8000-00f100000020";  // storage (NetApp AFF A400, Main DC)
-const I_NETAPP_DR_ID   = "00000000-0000-4000-8000-00f100000021";  // storage (NetApp AFF A220, DR)
-const I_PURE_ID        = "00000000-0000-4000-8000-00f100000022";  // storage (Pure Storage FlashArray, Main DC)
+// Storage (6)
+const I_NUTVM_S1_ID     = "00000000-0000-4000-8000-00f100000030";
+const I_NUTOBJ_S1_ID    = "00000000-0000-4000-8000-00f100000031";
+const I_PURE_S1_ID      = "00000000-0000-4000-8000-00f100000032";
+const I_FILESHARE_S1_ID = "00000000-0000-4000-8000-00f100000033";
+const I_NUTVM_S2_ID     = "00000000-0000-4000-8000-00f100000034";
+const I_NUTOBJ_S2_ID    = "00000000-0000-4000-8000-00f100000035";
 
-// Cloud current (2) — Patient portal cloud + Analytics cloud burst
-const I_GCE_PORTAL_ID  = "00000000-0000-4000-8000-00f100000030";  // compute (Google Compute Engine, GCP)
-const I_GCS_PORTAL_ID  = "00000000-0000-4000-8000-00f100000031";  // storage (Google Cloud Storage, GCP)
+// Data Protection (6)
+const I_DD_S1_ID       = "00000000-0000-4000-8000-00f100000040";
+const I_VEEAM_S1_ID    = "00000000-0000-4000-8000-00f100000041";
+const I_OPENTEXT_S1_ID = "00000000-0000-4000-8000-00f100000042";
+const I_DDCRS_S2_ID    = "00000000-0000-4000-8000-00f100000043";
+const I_VEEAM_S2_ID    = "00000000-0000-4000-8000-00f100000044";
+const I_OPENTEXT_S2_ID = "00000000-0000-4000-8000-00f100000045";
 
-// Data Protection (1)
-const I_VEEAM_ID       = "00000000-0000-4000-8000-00f100000040";  // dataProtection (Veeam B&R, Main DC)
+// Infrastructure (23)
+const I_CISCONET_S1_ID  = "00000000-0000-4000-8000-00f100000050";
+const I_DELLTOR_S1_ID   = "00000000-0000-4000-8000-00f100000051";
+const I_PALOALTO_S1_ID  = "00000000-0000-4000-8000-00f100000052";
+const I_FORTINET_S1_ID  = "00000000-0000-4000-8000-00f100000053";
+const I_CISCOISE_S1_ID  = "00000000-0000-4000-8000-00f100000054";
+const I_AD_S1_ID        = "00000000-0000-4000-8000-00f100000055";
+const I_RIVERBED_S1_ID  = "00000000-0000-4000-8000-00f100000056";
+const I_MENCM_S1_ID     = "00000000-0000-4000-8000-00f100000057";
+const I_F5_S1_ID        = "00000000-0000-4000-8000-00f100000058";
+const I_SPLUNK_S1_ID    = "00000000-0000-4000-8000-00f100000059";
+const I_ITSM_S1_ID      = "00000000-0000-4000-8000-00f100000060";
+const I_MESAM_S1_ID     = "00000000-0000-4000-8000-00f100000061";
+const I_CISCONET_S2_ID  = "00000000-0000-4000-8000-00f100000062";
+const I_DELLTOR_S2_ID   = "00000000-0000-4000-8000-00f100000063";
+const I_PALOALTO_S2_ID  = "00000000-0000-4000-8000-00f100000064";
+const I_FORTINET_S2_ID  = "00000000-0000-4000-8000-00f100000065";
+const I_AD_S2_ID        = "00000000-0000-4000-8000-00f100000066";
+const I_INFOBLOX_S2_ID  = "00000000-0000-4000-8000-00f100000067";
+const I_QUALIEX_S2_ID   = "00000000-0000-4000-8000-00f100000068";
+const I_SPLUNK_S2_ID    = "00000000-0000-4000-8000-00f100000069";
+const I_ITSM_S2_ID      = "00000000-0000-4000-8000-00f100000070";
+const I_MESAM_S2_ID     = "00000000-0000-4000-8000-00f100000071";
+const I_VPNGW_AZURE_ID  = "00000000-0000-4000-8000-00f100000072";
 
-// Virtualization (2 — kept; virtualizes the underlying compute)
-const I_VSPHERE_MAIN_ID = "00000000-0000-4000-8000-00f100000050";  // virtualization (VMware vSphere, Main DC)
-const I_VSPHERE_DR_ID   = "00000000-0000-4000-8000-00f100000051";  // virtualization (VMware vSphere, DR)
+// Workload (7)
+const I_GIS_S1_ID      = "00000000-0000-4000-8000-00f100000080";
+const I_EXCHANGE_S1_ID = "00000000-0000-4000-8000-00f100000081";
+const I_WEBAPPS_S1_ID  = "00000000-0000-4000-8000-00f100000082";
+const I_APPIN_S1_ID    = "00000000-0000-4000-8000-00f100000083";
+const I_VDIGPU_S2_ID   = "00000000-0000-4000-8000-00f100000084";
+const I_GIS_S2_ID      = "00000000-0000-4000-8000-00f100000085";
+const I_M365_AZURE_ID  = "00000000-0000-4000-8000-00f100000086";
 
-// Infrastructure (1)
-const I_CISCO_NET_ID    = "00000000-0000-4000-8000-00f100000060";  // infrastructure (Cisco Catalyst, Main DC)
+// ─── Desired-state instances (9) ──────────────────────────────────────
+const D_PRIVATECLOUD_S1_ID = "00000000-0000-4000-8000-00f100000100";
+const D_PRIVATECLOUD_S2_ID = "00000000-0000-4000-8000-00f100000101";
+const D_POWERSCALE_S1_ID   = "00000000-0000-4000-8000-00f100000102";
+const D_PPDM_S1_ID         = "00000000-0000-4000-8000-00f100000103";
+const D_PPDM_S2_ID         = "00000000-0000-4000-8000-00f100000104";
+const D_PPCRVAULT_S2_ID    = "00000000-0000-4000-8000-00f100000105";
+const D_APEXCLOUD_AZURE_ID = "00000000-0000-4000-8000-00f100000106";
+const D_CLOUDIQ_S1_ID      = "00000000-0000-4000-8000-00f100000107";
+const D_GIS_S1_ID          = "00000000-0000-4000-8000-00f100000108";
 
-// ─── Desired-state instances ─────────────────────────────────────────
-// Compute (4)
-const D_R770_MAIN_ID   = "00000000-0000-4000-8000-00f100000101";  // compute (PowerEdge R770, Main DC) — replaces HPE Main
-const D_R770_DR_ID     = "00000000-0000-4000-8000-00f100000102";  // compute (PowerEdge R770, DR) — replaces HPE DR
-const D_XE9680_ID      = "00000000-0000-4000-8000-00f100000103";  // compute (PowerEdge XE9680 GPU, Main DC) — net-new for Radiology AI
-const D_VXRAIL_ID      = "00000000-0000-4000-8000-00f100000104";  // compute (VxRail VD-4000, Branch Clinic) — replaces Lenovo
-
-// Storage (2)
-const D_POWERSTORE_ID  = "00000000-0000-4000-8000-00f100000110";  // storage (PowerStore 1200T, Main DC) — replaces NetApp + Pure tier-1
-const D_POWERSCALE_ID  = "00000000-0000-4000-8000-00f100000111";  // storage (PowerScale F210, Main DC) — replaces Pure for Analytics + AI
-
-// Data Protection (3)
-const D_PPDM_ID        = "00000000-0000-4000-8000-00f100000120";  // dataProtection (PowerProtect DD9410, Main DC) — replaces Veeam
-const D_PPCR_VAULT_ID  = "00000000-0000-4000-8000-00f100000121";  // dataProtection (Cyber Recovery Vault, DR) — net-new
-const D_APEX_BACKUP_ID = "00000000-0000-4000-8000-00f100000122";  // dataProtection (APEX Backup Services, GCP) — net-new
-
-// Infrastructure (1)
-const D_CLOUDIQ_ID     = "00000000-0000-4000-8000-00f100000130";  // infrastructure (CloudIQ + APEX AIOps, Main DC) — net-new
-
-// Desired workloads (5) mirror current shape
-const D_EHR_ID            = "00000000-0000-4000-8000-00f100000200";
-const D_PACS_ID           = "00000000-0000-4000-8000-00f100000201";
-const D_ANALYTICS_ID      = "00000000-0000-4000-8000-00f100000202";
-const D_PATIENT_PORTAL_ID = "00000000-0000-4000-8000-00f100000203";
-const D_RAD_AI_ID         = "00000000-0000-4000-8000-00f100000204";
-
-// ─── Gaps (8) ────────────────────────────────────────────────────────
-const GAP_EHR_REPLACE_ID     = "00000000-0000-4000-8000-00a100000001";   // modernize, replace, now
-const GAP_STORAGE_REPLACE_ID = "00000000-0000-4000-8000-00a100000002";   // modernize, replace, now
-const GAP_CYBER_REPLACE_ID   = "00000000-0000-4000-8000-00a100000003";   // cyber, replace, now
-const GAP_POWERSCALE_ID      = "00000000-0000-4000-8000-00a100000004";   // ai_data, replace, next
-const GAP_RAD_AI_ID          = "00000000-0000-4000-8000-00a100000005";   // ai_data, introduce, next
-const GAP_BRANCH_CONSOL_ID   = "00000000-0000-4000-8000-00a100000006";   // cost, consolidate, later
-const GAP_GCP_DR_ID          = "00000000-0000-4000-8000-00a100000007";   // cyber, introduce, next
-const GAP_HIPAA_DRILL_ID     = "00000000-0000-4000-8000-00a100000008";   // cyber, ops, now (origin: manual)
-const GAP_ANALYTICS_ENHANCE_ID = "00000000-0000-4000-8000-00a100000009"; // ai_data, enhance, next (Clinical Analytics workload upgrade)
+// ─── Gaps (9) ──────────────────────────────────────────────────────────
+const GAP_CONSOLIDATE_HCI_ID  = "00000000-0000-4000-8000-00a100000001";  // modernize, consolidate, now
+const GAP_STORAGE_REPLACE_ID  = "00000000-0000-4000-8000-00a100000002";  // modernize, replace, next
+const GAP_BACKUP_REPLACE_ID   = "00000000-0000-4000-8000-00a100000003";  // cyber, replace, now
+const GAP_CYBER_VAULT_ID      = "00000000-0000-4000-8000-00a100000004";  // cyber, introduce, now
+const GAP_EXCHANGE_RETIRE_ID  = "00000000-0000-4000-8000-00a100000005";  // cyber, ops, next
+const GAP_NC2_DECISION_ID     = "00000000-0000-4000-8000-00a100000006";  // cloud, ops, next (unreviewed)
+const GAP_CLOUDIQ_ID          = "00000000-0000-4000-8000-00a100000007";  // ops, introduce, later (unreviewed)
+const GAP_GIS_DR_DRILL_ID     = "00000000-0000-4000-8000-00a100000008";  // cyber, ops, now (origin: manual)
+const GAP_GIS_ENHANCE_ID      = "00000000-0000-4000-8000-00a100000009";  // modernize, enhance, next
 
 const CATALOG_VERSION = "2026.04";
-const TS              = "2026-05-09T18:00:00.000Z";
+const TS              = "2026-06-23T12:56:30.602Z";
 
 // ─── Build the engagement (executes once at module load) ─────────────
 
@@ -166,7 +191,7 @@ function buildDemoEngagement() {
     isDemo:         true,
     ownerId:        "local-user",
     presalesOwner:  "Dell Discovery Demo",
-    engagementDate: "2026-05-09",
+    engagementDate: "2026-06-23",
     status:         "Draft",
     createdAt:      TS,
     updatedAt:      TS
@@ -174,646 +199,590 @@ function buildDemoEngagement() {
 
   const customer = createEmptyCustomer({
     engagementId: ENGAGEMENT_ID,
-    name:         "Northstar Health Network",
-    vertical:     "Healthcare",
-    region:       "North America",
-    notes:        "Regional healthcare provider; ~12K employees across one main hospital, a DR site, an outpatient branch clinic, and Google Cloud workloads. HIPAA regulated. Demo engagement showcasing the v3 data model + AI assistant against four executive-friendly strategic drivers (cyber resilience, modernize aging infrastructure, AI/data, cost optimization)."
+    name:         "Meridian Heritage Development Authority (MHDA)",
+    vertical:     "Public Sector",
+    region:       "Middle East",
+    notes:        "Fictional public-sector authority overseeing a heritage, tourism, and urban development mega-project. Two-site data center footprint (Site 1 main + Site 2 DR) running a mixed Dell / Nutanix / VMware HCI estate, plus an early-stage Nutanix Cloud Clusters (NC2) landing zone on Azure with no workloads yet. GIS (heritage-site mapping) and on-prem Exchange are the two most business-critical workloads. Synthetic demo engagement — showcases the v3 data model + AI assistant against a fragmented multi-vendor estate. Any resemblance to a real organization is coincidental."
   });
 
   // ─── Drivers ─────────────────────────────────────────────────────
-  const driverCyber = createEmptyDriver({
-    ...cc(DRIVER_CYBER_ID),
-    businessDriverId: "cyber_resilience",
-    catalogVersion:   CATALOG_VERSION,
-    priority:         "High",
-    outcomes:         "• Survive a ransomware event without patient-care disruption.\n• Air-gapped immutable backups for tier-1 clinical systems, tested quarterly.\n• Recovery time objective <= 4 hours for the EHR, PACS, and patient portal.\n• HIPAA breach-readiness evidence for board reporting by Q4."
-  });
   const driverModernize = createEmptyDriver({
     ...cc(DRIVER_MODERNIZE_ID),
     businessDriverId: "modernize_infra",
     catalogVersion:   CATALOG_VERSION,
     priority:         "High",
-    outcomes:         "• Retire HPE ProLiant + NetApp AFF + Pure FlashArray (all at end-of-life within 18 months).\n• Standardize on a single Dell hardware platform across Main DC + DR.\n• Reduce hardware footprint by 30% via PowerEdge R770 density gains.\n• Cut maintenance contract spend by ~$1.2M/yr."
+    outcomes:         "• Standardize Site 1 and Site 2 compute + virtualization on one platform instead of running Dell, Nutanix NX, VMware vSphere, and Nutanix AHV side by side.\n• Collapse three parallel storage silos (VMware vSAN, Nutanix Object/VM storage, Pure Storage Object) into a single Dell-managed tier.\n• Make Site 1 -> Site 2 DR failover a true like-for-like swap instead of a cross-vendor exercise.\n• Reduce the vendor/support-contract count currently spread across Dell, Nutanix, VMware, and Pure."
   });
-  const driverAI = createEmptyDriver({
-    ...cc(DRIVER_AI_ID),
-    businessDriverId: "ai_data",
+  const driverCyber = createEmptyDriver({
+    ...cc(DRIVER_CYBER_ID),
+    businessDriverId: "cyber_resilience",
     catalogVersion:   CATALOG_VERSION,
     priority:         "High",
-    outcomes:         "• Stand up clinical-imaging AI inference (radiology CV models on PACS feed).\n• Reduce radiologist read time by 30% via AI triage.\n• Quantify reduction in re-admission risk via ML scoring within 12 months.\n• Unstructured data tier sized for 4 years of imaging growth."
+    outcomes:         "• Replace the Veeam estate -- backup policy still \"TBC\" at both sites per discovery -- with a documented, tested policy on PowerProtect.\n• Stand up an air-gapped Cyber Recovery vault using the Data Domain + CRS replication already running between Site 1 and Site 2.\n• Give the on-prem Exchange platform, currently the only Tier-1 workload with no documented DR copy, a resilience path via the parallel Microsoft 365 migration.\n• Quarterly tested-restore evidence for GIS, Exchange, and the web application portfolio."
   });
-  const driverCost = createEmptyDriver({
-    ...cc(DRIVER_COST_ID),
-    businessDriverId: "cost_optimization",
+  const driverCloud = createEmptyDriver({
+    ...cc(DRIVER_CLOUD_ID),
+    businessDriverId: "cloud_strategy",
     catalogVersion:   CATALOG_VERSION,
     priority:         "Medium",
-    outcomes:         "• Consolidate Branch Clinic infrastructure to a single VxRail node.\n• Cap Google Cloud spend through right-sizing + APEX Backup substitution.\n• Reduce data center power footprint by 25% via PowerEdge R770 efficiency.\n• Single CloudIQ pane for unified ops (no per-vendor consoles)."
+    outcomes:         "• Decide the hybrid cloud platform before the Azure NC2 landing zone (4 nodes, zero workloads today) takes its first production workload.\n• Avoid compounding Nutanix licensing in the cloud on top of the on-prem estate if Site 1/Site 2 standardize on a different platform.\n• Use the still-empty landing zone as the lowest-risk place to pilot Dell APEX Cloud Services consistency with the on-prem estate.\n• Validate VPN throughput between the Meridian sites and Azure before any workload-placement commitment."
+  });
+  const driverOps = createEmptyDriver({
+    ...cc(DRIVER_OPS_ID),
+    businessDriverId: "ops_simplicity",
+    catalogVersion:   CATALOG_VERSION,
+    priority:         "Medium",
+    outcomes:         "• Today's estate is split across ManageEngine NCM, ManageEngine SAM, ITSM Remedy, Qualiex, Splunk, F5, and separate Nutanix/VMware/Pure consoles -- no single infrastructure health view.\n• Stand up CloudIQ + Dell APEX AIOps as the unified telemetry pane once compute/storage consolidates onto Dell.\n• Cut the time the Meridian IT team spends context-switching between consoles during incident response.\n• Keep Splunk as the SOC/SIEM system of record -- AIOps complements it, not replaces it."
   });
 
   // ─── Environments ────────────────────────────────────────────────
-  const envMain = createEmptyEnvironment({
-    ...cc(ENV_MAIN_ID),
+  const envSite1 = createEmptyEnvironment({
+    ...cc(ENV_SITE1_ID),
     envCatalogId:   "coreDc",
     catalogVersion: CATALOG_VERSION,
-    alias:          "Main Data Center",
-    location:       "Headquarters Campus",
-    sizeKw:         180,
-    sqm:            850,
-    tier:           "Tier III",
-    notes:          "Primary on-prem site; hosts EHR, PACS, clinical analytics, and the Radiology AI build-out."
+    alias:          "Main Data Center – Site 1",
+    location:       "Meridian City (Main Campus)",
+    notes:          "Primary on-premises data center. Hosts the Dell + Nutanix + VMware HCI stack, the GIS platform, on-prem Exchange, and the customer-built web application portfolio. ~30-40% compute utilization; vSphere license renewal milestone noted during discovery."
   });
-  const envDr = createEmptyEnvironment({
-    ...cc(ENV_DR_ID),
+  const envSite2 = createEmptyEnvironment({
+    ...cc(ENV_SITE2_ID),
     envCatalogId:   "drDc",
     catalogVersion: CATALOG_VERSION,
-    alias:          "DR Site",
-    location:       "Co-located DR facility, separate metro",
-    sizeKw:         90,
-    sqm:            420,
-    tier:           "Tier II",
-    notes:          "Warm standby for EHR + PACS. Async replication from Main DC. Will host the Cyber Recovery Vault for ransomware isolation."
+    alias:          "DR Site – Site 2",
+    location:       "Secondary data center (disaster recovery)",
+    notes:          "Disaster recovery site; mirrors the Site 1 HCI stack at smaller scale. Hosts the GIS DR copy, GPU-accelerated VDI, and the Data Domain + Cyber Recovery (CRS) replication target for Site 1 backups."
   });
-  const envBranch = createEmptyEnvironment({
-    ...cc(ENV_BRANCH_ID),
-    envCatalogId:   "edge",
-    catalogVersion: CATALOG_VERSION,
-    alias:          "Branch Clinic",
-    location:       "Outpatient site",
-    sizeKw:         8,
-    sqm:            40,
-    tier:           "Tier I",
-    notes:          "Outpatient clinic; runs the patient portal locally for offline-tolerance + lightweight EHR cache. Replication to Main DC nightly."
-  });
-  const envGcp = createEmptyEnvironment({
-    ...cc(ENV_GCP_ID),
+  const envAzure = createEmptyEnvironment({
+    ...cc(ENV_AZURE_ID),
     envCatalogId:   "publicCloud",
     catalogVersion: CATALOG_VERSION,
-    alias:          "Google Cloud (GCP)",
-    location:       "us-central1",
-    sizeKw:         null,
-    sqm:            null,
-    tier:           null,
-    notes:          "GCP region for patient-portal cloud burst + analytics extract pipelines + DR egress. APEX Backup target post-modernization."
+    alias:          "Azure (NC2 Landing Zone)",
+    location:       "Microsoft Azure",
+    notes:          "Nutanix Cloud Clusters (NC2) landing zone -- 4 nodes, stood up recently, no production workloads yet. Connected to both on-prem sites via a redundant VPN gateway. Hosts the Microsoft 365 / Outlook SaaS tenant, operated by Microsoft and administered by internal IT."
   });
 
-  // ─── Current-state workloads (5) ─────────────────────────────────
-  // mappedAssetIds chain each workload to the underlying compute/storage/
-  // backup/network assets so the AI grounding meta-model + workload-
-  // mapping selector tell a clean story.
-  const instEHR = createEmptyInstance({
-    ...cc(I_EHR_ID),
-    state:          "current",
-    layerId:        "workload",
-    environmentId:  ENV_MAIN_ID,
-    label:          "Electronic Health Records (EHR)",
-    vendor:         "Epic / custom integration",
-    vendorGroup:    "custom",
-    criticality:    "High",
-    disposition:    "keep",
-    notes:          "Primary clinical system; HA-clustered Main DC + DR. Patient data; HIPAA scope.",
-    mappedAssetIds: [I_HPE_MAIN_ID, I_HPE_DR_ID, I_NETAPP_MAIN_ID, I_NETAPP_DR_ID, I_VEEAM_ID, I_VSPHERE_MAIN_ID, I_VSPHERE_DR_ID]
+  // ─── Current-state compute (5) ───────────────────────────────────
+  const instDellS1 = createEmptyInstance({
+    ...cc(I_DELL_S1_ID),
+    state: "current", layerId: "compute", environmentId: ENV_SITE1_ID,
+    label: "Dell Servers – Site 1 (28 nodes)", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", disposition: "keep", nodeCount: 28,
+    notes: "28 Dell servers; VMware + Nutanix HCI stack; ~30-40% utilization."
   });
-  const instPACS = createEmptyInstance({
-    ...cc(I_PACS_ID),
-    state:          "current",
-    layerId:        "workload",
-    environmentId:  ENV_MAIN_ID,
-    label:          "Imaging / PACS",
-    vendor:         "Sectra / custom integration",
-    vendorGroup:    "custom",
-    criticality:    "High",
-    disposition:    "keep",
-    notes:          "Radiology imaging; unstructured data growing 35%/yr. Will benefit from PowerScale + Radiology AI inference layer.",
-    mappedAssetIds: [I_CISCO_UCS_ID, I_NETAPP_MAIN_ID, I_VEEAM_ID, I_VSPHERE_MAIN_ID]
+  const instNxS1 = createEmptyInstance({
+    ...cc(I_NX_S1_ID),
+    state: "current", layerId: "compute", environmentId: ENV_SITE1_ID,
+    label: "Nutanix NX Servers – Site 1 (34 compute nodes)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "High", disposition: "consolidate", nodeCount: 34,
+    notes: "46 NX servers total; 34 compute nodes; remainder storage/mgmt roles. Folds into the Dell Private Cloud consolidation."
   });
-  const instAnalytics = createEmptyInstance({
-    ...cc(I_ANALYTICS_ID),
-    state:          "current",
-    layerId:        "workload",
-    environmentId:  ENV_MAIN_ID,
-    label:          "Clinical Analytics",
-    vendor:         "Custom (Spark + ML pipelines)",
-    vendorGroup:    "custom",
-    criticality:    "Medium",
-    disposition:    "enhance",
-    notes:          "Re-admission risk scoring + cost analytics. On Pure Storage today; will move to PowerScale + GCP burst extracts.",
-    mappedAssetIds: [I_HPE_MAIN_ID, I_PURE_ID, I_VSPHERE_MAIN_ID]
+  const instNxS2 = createEmptyInstance({
+    ...cc(I_NX_S2_ID),
+    state: "current", layerId: "compute", environmentId: ENV_SITE2_ID,
+    label: "Nutanix NX Servers – Site 2 (19 compute nodes)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "High", disposition: "consolidate", nodeCount: 19,
+    notes: "27 NX servers total; 19 compute, 8 storage; mirrors Site 1 HCI stack. Folds into the Dell Private Cloud consolidation."
   });
-  const instPatientPortal = createEmptyInstance({
-    ...cc(I_PATIENT_PORTAL_ID),
-    state:          "current",
-    layerId:        "workload",
-    environmentId:  ENV_BRANCH_ID,
-    label:          "Patient Portal",
-    vendor:         "Custom (web + native)",
-    vendorGroup:    "custom",
-    criticality:    "Medium",
-    disposition:    "consolidate",
-    notes:          "Runs at the Branch Clinic for offline-tolerance + GCP for cloud reachability. Will consolidate to VxRail edge.",
-    mappedAssetIds: [I_LENOVO_BRANCH_ID, I_GCE_PORTAL_ID, I_GCS_PORTAL_ID]
+  const instDellS2 = createEmptyInstance({
+    ...cc(I_DELL_S2_ID),
+    state: "current", layerId: "compute", environmentId: ENV_SITE2_ID,
+    label: "Dell Servers – Site 2 (20 nodes, 3 agency-dedic.)", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", disposition: "keep", nodeCount: 20,
+    notes: "17 standard Dell servers + 3 servers dedicated to a partner government agency at DR site."
   });
-  const instRadAI = createEmptyInstance({
-    ...cc(I_RAD_AI_ID),
-    state:          "current",
-    layerId:        "workload",
-    environmentId:  ENV_MAIN_ID,
-    label:          "Radiology AI (planned)",
-    vendor:         "(none yet)",
-    vendorGroup:    "custom",
-    criticality:    "Medium",
-    disposition:    "introduce",
-    notes:          "Net-new workload. No current technology — to be introduced via PowerEdge XE9680 + PowerScale F210.",
-    mappedAssetIds: []
+  const instNc2Azure = createEmptyInstance({
+    ...cc(I_NC2_AZURE_ID),
+    state: "current", layerId: "compute", environmentId: ENV_AZURE_ID,
+    label: "Nutanix NC2 on Azure – 4 nodes (landing zone)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "Low", disposition: "ops", nodeCount: 4,
+    notes: "4 NC2 nodes on Azure; landing zone only; no workloads yet; just started. Platform direction not yet decided."
   });
 
-  // ─── Current-state compute (4) ───────────────────────────────────
-  const instHpeMain = createEmptyInstance({
-    ...cc(I_HPE_MAIN_ID),
-    state:         "current",
-    layerId:       "compute",
-    environmentId: ENV_MAIN_ID,
-    label:         "HPE ProLiant DL380 (EHR + Analytics)",
-    vendor:        "HPE",
-    vendorGroup:   "nonDell",
-    criticality:   "High",
-    disposition:   "replace",
-    endOfSaleDate:        "2027-01-31",
-    endOfSupportDate:     "2027-12-31",
-    endOfServiceLifeDate: "2028-12-31",
-    nodeCount:            12,
-    notes:         "Hosts EHR clustered nodes + clinical analytics. End-of-life Q1 2027 per HPE roadmap. Replace with PowerEdge R770."
+  // ─── Current-state virtualization (7) ────────────────────────────
+  const instVsphereS1 = createEmptyInstance({
+    ...cc(I_VSPHERE_S1_ID),
+    state: "current", layerId: "virtualization", environmentId: ENV_SITE1_ID,
+    label: "VMware vSphere / vCenter – Site 1", vendor: "VMware", vendorGroup: "nonDell",
+    criticality: "High", disposition: "consolidate",
+    notes: "Primary production hypervisor; ~30-40% utilization; license renewal milestone noted. Folds into the Dell Private Cloud consolidation."
   });
-  const instHpeDR = createEmptyInstance({
-    ...cc(I_HPE_DR_ID),
-    state:         "current",
-    layerId:       "compute",
-    environmentId: ENV_DR_ID,
-    label:         "HPE ProLiant DL380 (EHR DR)",
-    vendor:        "HPE",
-    vendorGroup:   "nonDell",
-    criticality:   "High",
-    disposition:   "replace",
-    endOfSaleDate:        "2027-03-31",
-    endOfSupportDate:     "2028-03-31",
-    endOfServiceLifeDate: "2029-03-31",
-    nodeCount:            8,
-    notes:         "DR EHR cluster. Replace alongside Main DC nodes with PowerEdge R770 to standardize platform."
+  const instAhvS1 = createEmptyInstance({
+    ...cc(I_AHV_S1_ID),
+    state: "current", layerId: "virtualization", environmentId: ENV_SITE1_ID,
+    label: "Nutanix AHV – Site 1 (test & dev)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "consolidate",
+    notes: "AHV used for test and development workloads only; not primary production hypervisor. Folds into the Dell Private Cloud consolidation."
   });
-  const instCiscoUCS = createEmptyInstance({
-    ...cc(I_CISCO_UCS_ID),
-    state:         "current",
-    layerId:       "compute",
-    environmentId: ENV_MAIN_ID,
-    label:         "Cisco UCS B-Series (PACS)",
-    vendor:        "Cisco",
-    vendorGroup:   "nonDell",
-    criticality:   "High",
-    disposition:   "replace",
-    notes:         "Hosts PACS imaging workload. UCS Manager licensing renewal expensive; replace with PowerEdge R770."
+  const instVsanS1 = createEmptyInstance({
+    ...cc(I_VSAN_S1_ID),
+    state: "current", layerId: "virtualization", environmentId: ENV_SITE1_ID,
+    label: "VMware vSAN – Site 1 (1 PB, ~50% utilized)", vendor: "VMware", vendorGroup: "nonDell",
+    criticality: "High", disposition: "consolidate",
+    notes: "1 PB vSAN capacity; ~50% utilized; software-defined storage layer on HCI. Folds into the Dell Private Cloud consolidation."
   });
-  const instLenovoBranch = createEmptyInstance({
-    ...cc(I_LENOVO_BRANCH_ID),
-    state:         "current",
-    layerId:       "compute",
-    environmentId: ENV_BRANCH_ID,
-    label:         "Lenovo ThinkSystem (Patient Portal)",
-    vendor:        "Lenovo",
-    vendorGroup:   "nonDell",
-    criticality:   "Medium",
-    disposition:   "consolidate",
-    notes:         "Runs Patient Portal + lightweight EHR cache locally. Consolidate to VxRail VD-4000 (compute + virt + storage in one)."
+  const instVsphereS2 = createEmptyInstance({
+    ...cc(I_VSPHERE_S2_ID),
+    state: "current", layerId: "virtualization", environmentId: ENV_SITE2_ID,
+    label: "VMware vSphere / vCenter – Site 2", vendor: "VMware", vendorGroup: "nonDell",
+    criticality: "High", disposition: "consolidate",
+    notes: "Primary production hypervisor at DR; ~30-40% utilization; less mature mgmt noted. Folds into the Dell Private Cloud consolidation."
+  });
+  const instAhvS2 = createEmptyInstance({
+    ...cc(I_AHV_S2_ID),
+    state: "current", layerId: "virtualization", environmentId: ENV_SITE2_ID,
+    label: "Nutanix AHV – Site 2 (test & dev)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "consolidate",
+    notes: "AHV used for test and development workloads at DR site. Folds into the Dell Private Cloud consolidation."
+  });
+  const instVsanS2 = createEmptyInstance({
+    ...cc(I_VSAN_S2_ID),
+    state: "current", layerId: "virtualization", environmentId: ENV_SITE2_ID,
+    label: "VMware vSAN – Site 2 (740 TB, ~50% utilized)", vendor: "VMware", vendorGroup: "nonDell",
+    criticality: "High", disposition: "consolidate",
+    notes: "740 TB vSAN; ~350 TB utilized (~50%); sufficient headroom for failover. Folds into the Dell Private Cloud consolidation."
+  });
+  const instAhvNc2Azure = createEmptyInstance({
+    ...cc(I_AHV_NC2_AZURE_ID),
+    state: "current", layerId: "virtualization", environmentId: ENV_AZURE_ID,
+    label: "Nutanix AHV on NC2 – Azure (landing zone)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "Low", disposition: "ops",
+    notes: "AHV hypervisor on NC2 Azure nodes; landing zone stage; minimal utilization. Platform direction not yet decided."
   });
 
-  // ─── Current-state storage (3) ───────────────────────────────────
-  const instNetAppMain = createEmptyInstance({
-    ...cc(I_NETAPP_MAIN_ID),
-    state:         "current",
-    layerId:       "storage",
-    environmentId: ENV_MAIN_ID,
-    label:         "NetApp AFF A400 (EHR + PACS tier-1)",
-    vendor:        "NetApp",
-    vendorGroup:   "nonDell",
-    criticality:   "High",
-    disposition:   "replace",
-    endOfSaleDate:        "2026-12-31",
-    endOfSupportDate:     "2027-12-31",
-    endOfServiceLifeDate: "2028-12-31",
-    nodeCount:            6,
-    notes:         "Tier-1 storage for EHR + PACS. End-of-support 2027. Replace with PowerStore 1200T for higher density + native dedup."
+  // ─── Current-state storage (6) ───────────────────────────────────
+  const instNutVmS1 = createEmptyInstance({
+    ...cc(I_NUTVM_S1_ID),
+    state: "current", layerId: "storage", environmentId: ENV_SITE1_ID,
+    label: "Nutanix VM Storage – Site 1 (~500 TB)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "~500 TB VM storage pool; ~120 TB currently used by VMs."
   });
-  const instNetAppDR = createEmptyInstance({
-    ...cc(I_NETAPP_DR_ID),
-    state:         "current",
-    layerId:       "storage",
-    environmentId: ENV_DR_ID,
-    label:         "NetApp AFF A220 (DR replication)",
-    vendor:        "NetApp",
-    vendorGroup:   "nonDell",
-    criticality:   "High",
-    disposition:   "replace",
-    endOfSaleDate:        "2027-06-30",
-    endOfSupportDate:     "2028-06-30",
-    endOfServiceLifeDate: "2029-06-30",
-    nodeCount:            4,
-    notes:         "DR replication target for EHR + PACS. Replace with PowerStore 1200T DR pair for protocol consistency."
+  const instNutObjS1 = createEmptyInstance({
+    ...cc(I_NUTOBJ_S1_ID),
+    state: "current", layerId: "storage", environmentId: ENV_SITE1_ID,
+    label: "Nutanix Object Storage – Site 1 (800 TB)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "~800 TB object storage; ~40% utilization; significant headroom remaining."
   });
-  const instPure = createEmptyInstance({
-    ...cc(I_PURE_ID),
-    state:         "current",
-    layerId:       "storage",
-    environmentId: ENV_MAIN_ID,
-    label:         "Pure Storage FlashArray (Analytics)",
-    vendor:        "Pure Storage",
-    vendorGroup:   "nonDell",
-    criticality:   "Medium",
-    disposition:   "replace",
-    endOfSaleDate:        "2027-02-28",
-    endOfSupportDate:     "2028-02-28",
-    endOfServiceLifeDate: "2029-02-28",
-    nodeCount:            10,
-    notes:         "Analytics warehouse. Off-budget renewal next year; replace with PowerScale F210 to absorb AI training data growth in the same tier."
+  const instPureS1 = createEmptyInstance({
+    ...cc(I_PURE_S1_ID),
+    state: "current", layerId: "storage", environmentId: ENV_SITE1_ID,
+    label: "Pure Storage Object – Site 1 (300 TB)", vendor: "Pure Storage", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "replace",
+    notes: "~300 TB; ~110 TB in use; at least one node located at main site. Replace with PowerScale to unify the storage tier."
+  });
+  const instFileshareS1 = createEmptyInstance({
+    ...cc(I_FILESHARE_S1_ID),
+    state: "current", layerId: "storage", environmentId: ENV_SITE1_ID,
+    label: "Nutanix Fileshare – Site 1", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "File sharing service on Nutanix platform; workloads include pictures and fileshares."
+  });
+  const instNutVmS2 = createEmptyInstance({
+    ...cc(I_NUTVM_S2_ID),
+    state: "current", layerId: "storage", environmentId: ENV_SITE2_ID,
+    label: "Nutanix VM Storage – Site 2 (~400 TB)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "~400 TB VM storage; ~40 TB currently used; low utilization at DR site."
+  });
+  const instNutObjS2 = createEmptyInstance({
+    ...cc(I_NUTOBJ_S2_ID),
+    state: "current", layerId: "storage", environmentId: ENV_SITE2_ID,
+    label: "Nutanix Object Storage – Site 2 (1 PB)", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "1 PB object; ~60% for filesharing (400 TB + 600 TB diff hardware levels)."
   });
 
-  // ─── Current-state cloud assets (2) ──────────────────────────────
-  const instGcePortal = createEmptyInstance({
-    ...cc(I_GCE_PORTAL_ID),
-    state:         "current",
-    layerId:       "compute",
-    environmentId: ENV_GCP_ID,
-    label:         "Google Compute Engine (Patient Portal)",
-    vendor:        "Google Cloud",
-    vendorGroup:   "nonDell",
-    criticality:   "Medium",
-    disposition:   "keep",
-    notes:         "Cloud-side Patient Portal nodes. GCP-native; out of Dell replace scope. Stays."
+  // ─── Current-state data protection (6) ───────────────────────────
+  const instDdS1 = createEmptyInstance({
+    ...cc(I_DD_S1_ID),
+    state: "current", layerId: "dataProtection", environmentId: ENV_SITE1_ID,
+    label: "Dell Data Domain Backup Appliance – Site 1", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", disposition: "keep",
+    notes: "1x backup appliance DD connected to DR CRS DD; backs up VMs, GIS, fileshares."
   });
-  const instGcsPortal = createEmptyInstance({
-    ...cc(I_GCS_PORTAL_ID),
-    state:         "current",
-    layerId:       "storage",
-    environmentId: ENV_GCP_ID,
-    label:         "Google Cloud Storage (Patient Portal)",
-    vendor:        "Google Cloud",
-    vendorGroup:   "nonDell",
-    criticality:   "Medium",
-    disposition:   "keep",
-    notes:         "Patient-portal blob storage. GCP-native; stays."
+  const instVeeamS1 = createEmptyInstance({
+    ...cc(I_VEEAM_S1_ID),
+    state: "current", layerId: "dataProtection", environmentId: ENV_SITE1_ID,
+    label: "Veeam Backup & Replication – Site 1", vendor: "Veeam", vendorGroup: "nonDell",
+    criticality: "High", disposition: "replace",
+    notes: "Backup software for VMs, GIS workloads, pictures, fileshares; policy TBC. Replace with PowerProtect Data Manager."
   });
-
-  // ─── Current-state data protection (1) ───────────────────────────
-  const instVeeam = createEmptyInstance({
-    ...cc(I_VEEAM_ID),
-    state:         "current",
-    layerId:       "dataProtection",
-    environmentId: ENV_MAIN_ID,
-    label:         "Veeam Backup & Replication (with tape)",
-    vendor:        "Veeam",
-    vendorGroup:   "nonDell",
-    criticality:   "High",
-    disposition:   "replace",
-    endOfSaleDate:        "2027-09-30",
-    endOfSupportDate:     "2028-09-30",
-    endOfServiceLifeDate: "2029-09-30",
-    nodeCount:            3,
-    notes:         "Backup of EHR, PACS, Analytics. Tape rotation manual; no immutable copy. Cyber gap. Replace with PowerProtect DD9410 + Cyber Recovery Vault."
+  const instOpentextS1 = createEmptyInstance({
+    ...cc(I_OPENTEXT_S1_ID),
+    state: "current", layerId: "dataProtection", environmentId: ENV_SITE1_ID,
+    label: "OpenText Archiving Solution – Site 1", vendor: "OpenText", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "Archiving solution for long-term data retention."
   });
-
-  // ─── Current-state virtualization (2) ────────────────────────────
-  const instVsphereMain = createEmptyInstance({
-    ...cc(I_VSPHERE_MAIN_ID),
-    state:         "current",
-    layerId:       "virtualization",
-    environmentId: ENV_MAIN_ID,
-    label:         "VMware vSphere (Main DC)",
-    vendor:        "VMware",
-    vendorGroup:   "nonDell",
-    criticality:   "High",
-    disposition:   "keep",
-    notes:         "Hypervisor for EHR + PACS + Analytics VMs. Stays; PowerEdge R770 hardware refresh underneath."
+  const instDdcrsS2 = createEmptyInstance({
+    ...cc(I_DDCRS_S2_ID),
+    state: "current", layerId: "dataProtection", environmentId: ENV_SITE2_ID,
+    label: "Dell Data Domain + CRS – Site 2", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", disposition: "keep",
+    notes: "DD + CRS at DR site; acts as backup target for Site 1 Data Domain replication. Foundation for the Cyber Recovery vault."
   });
-  const instVsphereDR = createEmptyInstance({
-    ...cc(I_VSPHERE_DR_ID),
-    state:         "current",
-    layerId:       "virtualization",
-    environmentId: ENV_DR_ID,
-    label:         "VMware vSphere (DR)",
-    vendor:        "VMware",
-    vendorGroup:   "nonDell",
-    criticality:   "High",
-    disposition:   "keep",
-    notes:         "DR hypervisor. Stays; hardware refresh to PowerEdge R770."
+  const instVeeamS2 = createEmptyInstance({
+    ...cc(I_VEEAM_S2_ID),
+    state: "current", layerId: "dataProtection", environmentId: ENV_SITE2_ID,
+    label: "Veeam Backup & Replication – Site 2", vendor: "Veeam", vendorGroup: "nonDell",
+    criticality: "High", disposition: "replace",
+    notes: "Backup software at DR site; backs up VMs, GIS workloads, fileshares; policy TBC. Replace with PowerProtect Data Manager."
+  });
+  const instOpentextS2 = createEmptyInstance({
+    ...cc(I_OPENTEXT_S2_ID),
+    state: "current", layerId: "dataProtection", environmentId: ENV_SITE2_ID,
+    label: "OpenText Archiving Solution – Site 2", vendor: "OpenText", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "Archiving solution at DR site; mirrors Site 1 archiving capability."
   });
 
-  // ─── Current-state infrastructure (1) ────────────────────────────
-  const instCiscoNet = createEmptyInstance({
-    ...cc(I_CISCO_NET_ID),
-    state:         "current",
-    layerId:       "infrastructure",
-    environmentId: ENV_MAIN_ID,
-    label:         "Cisco Catalyst (Main DC networking)",
-    vendor:        "Cisco",
-    vendorGroup:   "nonDell",
-    criticality:   "Medium",
-    disposition:   "keep",
-    notes:         "Core networking. Out of Dell replace scope this round; stays. Future opportunity for PowerSwitch."
+  // ─── Current-state infrastructure (23) ───────────────────────────
+  const instCiscoNetS1 = createEmptyInstance({
+    ...cc(I_CISCONET_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "Cisco Networking – Site 1 (25G / 200G core)", vendor: "Cisco", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "Servers 25G, LACP, 10G; 200G core; all redundant; storage all iSCSI; to continue."
+  });
+  const instDellTorS1 = createEmptyInstance({
+    ...cc(I_DELLTOR_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "Dell ToR Switches – Site 1 (HCI / VxRail)", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", disposition: "keep",
+    notes: "Dell network top-of-rack switches supporting HCI/VxRail deployment at Site 1."
+  });
+  const instPaloAltoS1 = createEmptyInstance({
+    ...cc(I_PALOALTO_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "Palo Alto NGFW – Site 1 (DC perimeter)", vendor: "Palo Alto", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "3-tier security; firewall must remain even during migration; DC perimeter protection."
+  });
+  const instFortinetS1 = createEmptyInstance({
+    ...cc(I_FORTINET_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "Fortinet FortiGate + FortiManager – Site 1", vendor: "Fortinet", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "FortiGate DC firewall + FortiManager centralized management; 3-tier security stack."
+  });
+  const instCiscoIseS1 = createEmptyInstance({
+    ...cc(I_CISCOISE_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "Cisco ISE – Network Access Control – Site 1", vendor: "Cisco", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "Network access control (NAC); identity-based policy enforcement."
+  });
+  const instAdS1 = createEmptyInstance({
+    ...cc(I_AD_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "Active Directory / LDAP – Site 1", vendor: "Microsoft", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "Directory services and LDAP; identity foundation for Site 1."
+  });
+  const instRiverbedS1 = createEmptyInstance({
+    ...cc(I_RIVERBED_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "Riverbed WAN Optimizer – Site 1", vendor: "Riverbed", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "WAN optimization and traffic management tool."
+  });
+  const instMencmS1 = createEmptyInstance({
+    ...cc(I_MENCM_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "ManageEngine NCM – Network Config Mgmt", vendor: "ManageEngine", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "Network configuration management tool; part of monitoring suite."
+  });
+  const instF5S1 = createEmptyInstance({
+    ...cc(I_F5_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "F5 WAF / Load Balancer – Site 1", vendor: "F5", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "Web application firewall and load balancer; application delivery control."
+  });
+  const instSplunkS1 = createEmptyInstance({
+    ...cc(I_SPLUNK_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "Splunk SIEM – SOC – Site 1", vendor: "Splunk", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "SOC/SIEM platform; AHV compatibility noted as better with Splunk."
+  });
+  const instItsmS1 = createEmptyInstance({
+    ...cc(I_ITSM_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "ITSM Remedy – Ticketing & Change Mgmt", vendor: "BMC", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "IT service management for ticketing and change management processes."
+  });
+  const instMesamS1 = createEmptyInstance({
+    ...cc(I_MESAM_S1_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "ManageEngine SAM – Asset & Service Mgmt", vendor: "ManageEngine", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "Service and asset management platform."
+  });
+  const instCiscoNetS2 = createEmptyInstance({
+    ...cc(I_CISCONET_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "Cisco Networking – Site 2 (25G / 200G core)", vendor: "Cisco", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "Servers 25G, LACP, 10G; 200G core; all redundant; iSCSI; Cisco to continue."
+  });
+  const instDellTorS2 = createEmptyInstance({
+    ...cc(I_DELLTOR_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "Dell ToR Switches – Site 2 (HCI / VxRail)", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", disposition: "keep",
+    notes: "Dell network top-of-rack switches supporting HCI/VxRail at DR site."
+  });
+  const instPaloAltoS2 = createEmptyInstance({
+    ...cc(I_PALOALTO_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "Palo Alto NGFW – Site 2 (DC perimeter)", vendor: "Palo Alto", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "DC perimeter NGFW; 3-tier security; firewall must remain even during migration."
+  });
+  const instFortinetS2 = createEmptyInstance({
+    ...cc(I_FORTINET_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "Fortinet FortiGate – Site 2", vendor: "Fortinet", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "FortiGate DC firewall at DR site; 3-tier security stack."
+  });
+  const instAdS2 = createEmptyInstance({
+    ...cc(I_AD_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "Active Directory / LDAP – Site 2", vendor: "Microsoft", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "Directory services and LDAP at DR site; no separate management noted."
+  });
+  const instInfobloxS2 = createEmptyInstance({
+    ...cc(I_INFOBLOX_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "Infoblox – DNS / IPAM – Site 2", vendor: "Infoblox", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "DNS and IPAM (IP address management) service at DR site."
+  });
+  const instQualiexS2 = createEmptyInstance({
+    ...cc(I_QUALIEX_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "Qualiex – Security & Compliance Mgmt", vendor: "Qualiex", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "Security and compliance management platform at DR site."
+  });
+  const instSplunkS2 = createEmptyInstance({
+    ...cc(I_SPLUNK_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "Splunk – Monitoring – Site 2", vendor: "Splunk", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "Monitoring and log management at DR site."
+  });
+  const instItsmS2 = createEmptyInstance({
+    ...cc(I_ITSM_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "ITSM Remedy – Site 2", vendor: "BMC", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "IT service management ticketing at DR site."
+  });
+  const instMesamS2 = createEmptyInstance({
+    ...cc(I_MESAM_S2_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_SITE2_ID,
+    label: "ManageEngine SAM – Site 2", vendor: "ManageEngine", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "Service and asset management at DR site."
+  });
+  const instVpnGwAzure = createEmptyInstance({
+    ...cc(I_VPNGW_AZURE_ID),
+    state: "current", layerId: "infrastructure", environmentId: ENV_AZURE_ID,
+    label: "Azure VPN Gateway – Redundant (to on-prem)", vendor: "Microsoft", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "Redundant VPN gateway connecting on-prem sites to Azure; throughput TBC."
   });
 
-  // ─── Desired-state Dell solutions ────────────────────────────────
-  // Compute (4)
-  const desR770Main = createEmptyInstance({
-    ...cc(D_R770_MAIN_ID),
-    state:         "desired",
-    layerId:       "compute",
-    environmentId: ENV_MAIN_ID,
-    label:         "PowerEdge R770 (EHR + Analytics)",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "High",
-    priority:      "Now",
-    disposition:   "replace",
-    originId:      I_HPE_MAIN_ID,
-    notes:         "Replaces HPE DL380 in the Main DC. Hosts the EHR cluster + Clinical Analytics nodes. Higher density + native iDRAC + CloudIQ telemetry."
+  // ─── Current-state workloads (7) ─────────────────────────────────
+  const instGisS1 = createEmptyInstance({
+    ...cc(I_GIS_S1_ID),
+    state: "current", layerId: "workload", environmentId: ENV_SITE1_ID,
+    label: "GIS Platform – Site 1", vendor: "Custom", vendorGroup: "custom",
+    criticality: "High", disposition: "enhance",
+    notes: "GIS workloads identified as business-critical; includes GIS data and pictures. Enhance via the modernized Dell infrastructure chain."
   });
-  const desR770DR = createEmptyInstance({
-    ...cc(D_R770_DR_ID),
-    state:         "desired",
-    layerId:       "compute",
-    environmentId: ENV_DR_ID,
-    label:         "PowerEdge R770 (EHR DR)",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "High",
-    priority:      "Now",
-    disposition:   "replace",
-    originId:      I_HPE_DR_ID,
-    notes:         "Replaces HPE DL380 in the DR Site. Standardizes platform across Main + DR for unified ops."
+  const instExchangeS1 = createEmptyInstance({
+    ...cc(I_EXCHANGE_S1_ID),
+    state: "current", layerId: "workload", environmentId: ENV_SITE1_ID,
+    label: "Microsoft Exchange – Email (critical)", vendor: "Microsoft", vendorGroup: "nonDell",
+    criticality: "High", disposition: "retire",
+    notes: "On-premises Exchange; business-critical email platform; separate from M365 SaaS. No documented DR copy, unlike GIS. Retire in favor of completing the parallel Microsoft 365 migration."
   });
-  const desXe9680 = createEmptyInstance({
-    ...cc(D_XE9680_ID),
-    state:         "desired",
-    layerId:       "compute",
-    environmentId: ENV_MAIN_ID,
-    label:         "PowerEdge XE9680 (Radiology AI inference)",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "Medium",
-    priority:      "Next",
-    disposition:   "introduce",
-    notes:         "Net-new for Radiology AI workload. 8x H100 GPUs for clinical CV inference + model fine-tuning on de-identified imaging data."
+  const instWebappsS1 = createEmptyInstance({
+    ...cc(I_WEBAPPS_S1_ID),
+    state: "current", layerId: "workload", environmentId: ENV_SITE1_ID,
+    label: "Web Applications & Databases – Site 1", vendor: "Custom", vendorGroup: "custom",
+    criticality: "High", disposition: "keep",
+    notes: "Multiple web applications and databases; custom/mixed portfolio."
   });
-  const desVxrail = createEmptyInstance({
-    ...cc(D_VXRAIL_ID),
-    state:         "desired",
-    layerId:       "compute",
-    environmentId: ENV_BRANCH_ID,
-    label:         "VxRail VD-4000 (Branch Clinic edge)",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "Medium",
-    priority:      "Later",
-    disposition:   "consolidate",
-    originId:      I_LENOVO_BRANCH_ID,
-    notes:         "Consolidates Branch Clinic compute + virt + local storage into a single 1U HCI node. Replaces Lenovo + simplifies branch ops."
+  const instAppinS1 = createEmptyInstance({
+    ...cc(I_APPIN_S1_ID),
+    state: "current", layerId: "workload", environmentId: ENV_SITE1_ID,
+    label: "Appin Task & Process Mgmt System", vendor: "Appin", vendorGroup: "nonDell",
+    criticality: "Medium", disposition: "keep",
+    notes: "Task and process management system (monument system)."
+  });
+  const instVdigpuS2 = createEmptyInstance({
+    ...cc(I_VDIGPU_S2_ID),
+    state: "current", layerId: "workload", environmentId: ENV_SITE2_ID,
+    label: "Nutanix VDI with GPU – Site 2", vendor: "Nutanix", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "GPU-accelerated VDI workload on Nutanix platform at DR site."
+  });
+  const instGisS2 = createEmptyInstance({
+    ...cc(I_GIS_S2_ID),
+    state: "current", layerId: "workload", environmentId: ENV_SITE2_ID,
+    label: "GIS Platform – Site 2 (DR)", vendor: "Custom", vendorGroup: "custom",
+    criticality: "High", disposition: "keep",
+    notes: "GIS DR workload; Exchange also noted as business-critical at DR site."
+  });
+  const instM365Azure = createEmptyInstance({
+    ...cc(I_M365_AZURE_ID),
+    state: "current", layerId: "workload", environmentId: ENV_AZURE_ID,
+    label: "Microsoft Outlook / M365 SaaS – Azure", vendor: "Microsoft", vendorGroup: "nonDell",
+    criticality: "High", disposition: "keep",
+    notes: "SaaS; operated by Microsoft; administered by internal IT; separate from on-prem Exchange. Target platform for the Exchange retirement gap."
   });
 
-  // Storage (2)
-  const desPowerStore = createEmptyInstance({
-    ...cc(D_POWERSTORE_ID),
-    state:         "desired",
-    layerId:       "storage",
-    environmentId: ENV_MAIN_ID,
-    label:         "PowerStore 1200T (EHR + PACS tier-1)",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "High",
-    priority:      "Now",
-    disposition:   "replace",
-    originId:      I_NETAPP_MAIN_ID,
-    notes:         "Replaces NetApp AFF A400 for tier-1 EHR + PACS. Native AppSync for Epic + 4:1 dedup ratio. DR pair on the DR site replaces NetApp A220 too."
+  // ─── Desired-state Dell solutions (9) ────────────────────────────
+  const desPrivateCloudS1 = createEmptyInstance({
+    ...cc(D_PRIVATECLOUD_S1_ID),
+    state: "desired", layerId: "compute", environmentId: ENV_SITE1_ID,
+    label: "Dell Private Cloud (PowerFlex) – Site 1", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", priority: "Now", disposition: "consolidate", originId: I_NX_S1_ID,
+    notes: "Consolidates the Site 1 Dell + Nutanix NX compute, VMware vSphere, Nutanix AHV, and VMware vSAN into one Dell Automation Platform / PowerFlex private cloud. Single platform makes Site 1 -> Site 2 failover a like-for-like swap."
   });
-  const desPowerScale = createEmptyInstance({
-    ...cc(D_POWERSCALE_ID),
-    state:         "desired",
-    layerId:       "storage",
-    environmentId: ENV_MAIN_ID,
-    label:         "PowerScale F210 (Analytics + AI training data)",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "Medium",
-    priority:      "Next",
-    disposition:   "replace",
-    originId:      I_PURE_ID,
-    notes:         "Replaces Pure FlashArray for Analytics. Single namespace also serves Radiology AI training datasets. Scale-out to 4 years of imaging growth."
+  const desPrivateCloudS2 = createEmptyInstance({
+    ...cc(D_PRIVATECLOUD_S2_ID),
+    state: "desired", layerId: "compute", environmentId: ENV_SITE2_ID,
+    label: "Dell Private Cloud (PowerFlex) – Site 2", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", priority: "Now", disposition: "consolidate", originId: I_NX_S2_ID,
+    notes: "Mirrors the Site 1 Dell Private Cloud build at the DR site, replacing the parallel Nutanix NX + VMware vSphere/AHV/vSAN stack."
   });
-
-  // Data Protection (3)
-  const desPpdm = createEmptyInstance({
-    ...cc(D_PPDM_ID),
-    state:         "desired",
-    layerId:       "dataProtection",
-    environmentId: ENV_MAIN_ID,
-    label:         "PowerProtect DD9410 (primary backup)",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "High",
-    priority:      "Now",
-    disposition:   "replace",
-    originId:      I_VEEAM_ID,
-    notes:         "Replaces Veeam + tape. Native immutable backups via DD Boost; integrates with Cyber Recovery Vault on DR side."
+  const desPowerScaleS1 = createEmptyInstance({
+    ...cc(D_POWERSCALE_S1_ID),
+    state: "desired", layerId: "storage", environmentId: ENV_SITE1_ID,
+    label: "PowerScale (unified storage) – Site 1", vendor: "Dell", vendorGroup: "dell",
+    criticality: "Medium", priority: "Next", disposition: "replace", originId: I_PURE_S1_ID,
+    notes: "Replaces the standalone Pure Storage Object tier. Single namespace also absorbs growth headroom the Nutanix Object/VM storage pools already have, simplifying the storage estate over time."
   });
-  const desPpcrVault = createEmptyInstance({
-    ...cc(D_PPCR_VAULT_ID),
-    state:         "desired",
-    layerId:       "dataProtection",
-    environmentId: ENV_DR_ID,
-    label:         "Cyber Recovery Vault",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "High",
-    priority:      "Now",
-    disposition:   "introduce",
-    notes:         "Air-gapped isolated copy of EHR + PACS at the DR site. Tested-restore drill quarterly. Ransomware-survival cornerstone."
+  const desPpdmS1 = createEmptyInstance({
+    ...cc(D_PPDM_S1_ID),
+    state: "desired", layerId: "dataProtection", environmentId: ENV_SITE1_ID,
+    label: "PowerProtect Data Manager – Site 1", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", priority: "Now", disposition: "replace", originId: I_VEEAM_S1_ID,
+    notes: "Replaces Veeam at Site 1 with a documented, policy-driven backup platform integrated with the existing Data Domain appliance."
   });
-  const desApexBackup = createEmptyInstance({
-    ...cc(D_APEX_BACKUP_ID),
-    state:         "desired",
-    layerId:       "dataProtection",
-    environmentId: ENV_GCP_ID,
-    label:         "APEX Backup Services (GCP egress)",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "Medium",
-    priority:      "Next",
-    disposition:   "introduce",
-    notes:         "Cloud DR egress target. Backs up Patient Portal GCP workloads to a Dell-managed cloud target. Closes the GCP-side backup gap."
+  const desPpdmS2 = createEmptyInstance({
+    ...cc(D_PPDM_S2_ID),
+    state: "desired", layerId: "dataProtection", environmentId: ENV_SITE2_ID,
+    label: "PowerProtect Data Manager – Site 2", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", priority: "Now", disposition: "replace", originId: I_VEEAM_S2_ID,
+    notes: "Replaces Veeam at the DR site, paired with the Site 1 deployment under one backup policy."
+  });
+  const desPpcrVaultS2 = createEmptyInstance({
+    ...cc(D_PPCRVAULT_S2_ID),
+    state: "desired", layerId: "dataProtection", environmentId: ENV_SITE2_ID,
+    label: "PowerProtect Cyber Recovery Vault – Site 2", vendor: "Dell", vendorGroup: "dell",
+    criticality: "High", priority: "Now", disposition: "introduce",
+    notes: "Net-new air-gapped vault built on the existing Data Domain + CRS replication between Site 1 and Site 2. Closes the ransomware-isolation gap the current Veeam + DD setup doesn't cover."
+  });
+  const desApexCloudAzure = createEmptyInstance({
+    ...cc(D_APEXCLOUD_AZURE_ID),
+    state: "desired", layerId: "compute", environmentId: ENV_AZURE_ID,
+    label: "Dell APEX Cloud Services – Azure (hybrid extension)", vendor: "Dell", vendorGroup: "dell",
+    criticality: "Low", priority: "Next", disposition: "introduce",
+    notes: "Pilot of Dell-consistent hybrid cloud services in the still-empty NC2 landing zone, ahead of any production workload landing on it -- the lowest-risk point to settle the platform decision."
+  });
+  const desCloudIqS1 = createEmptyInstance({
+    ...cc(D_CLOUDIQ_S1_ID),
+    state: "desired", layerId: "infrastructure", environmentId: ENV_SITE1_ID,
+    label: "CloudIQ + Dell APEX AIOps (unified ops) – Site 1", vendor: "Dell", vendorGroup: "dell",
+    criticality: "Medium", priority: "Later", disposition: "introduce",
+    notes: "Single telemetry pane across the consolidated Dell Private Cloud + PowerScale + PowerProtect estate. Complements Splunk SIEM rather than replacing it."
+  });
+  const desGisS1 = createEmptyInstance({
+    ...cc(D_GIS_S1_ID),
+    state: "desired", layerId: "workload", environmentId: ENV_SITE1_ID,
+    label: "GIS Platform – Site 1 (modernized)", vendor: "Custom", vendorGroup: "custom",
+    criticality: "High", priority: "Now", disposition: "enhance", originId: I_GIS_S1_ID,
+    notes: "Same logical GIS workload; underlying platform refreshed to Dell Private Cloud + PowerScale, backed up via PowerProtect Data Manager + the Cyber Recovery vault.",
+    mappedAssetIds: [D_PRIVATECLOUD_S1_ID, D_POWERSCALE_S1_ID, D_PPDM_S1_ID, D_PPCRVAULT_S2_ID]
   });
 
-  // Infrastructure (1)
-  const desCloudIq = createEmptyInstance({
-    ...cc(D_CLOUDIQ_ID),
-    state:         "desired",
-    layerId:       "infrastructure",
-    environmentId: ENV_MAIN_ID,
-    label:         "CloudIQ + APEX AIOps (unified ops)",
-    vendor:        "Dell",
-    vendorGroup:   "dell",
-    criticality:   "Medium",
-    priority:      "Next",
-    disposition:   "introduce",
-    notes:         "Single pane for the whole Dell estate (PowerEdge + PowerStore + PowerScale + PowerProtect + VxRail). Replaces vendor-specific consoles."
-  });
-
-  // ─── Desired-state workloads (5) ─────────────────────────────────
-  // Each maps to its underlying desired-state Dell asset chain so the
-  // workload-mapping selector tells the full story.
-  const desEHR = createEmptyInstance({
-    ...cc(D_EHR_ID),
-    state:          "desired",
-    layerId:        "workload",
-    environmentId:  ENV_MAIN_ID,
-    label:          "Electronic Health Records (EHR) — modernized",
-    vendor:         "Epic / custom integration",
-    vendorGroup:    "custom",
-    criticality:    "High",
-    priority:       "Now",
-    disposition:    "keep",
-    originId:       I_EHR_ID,
-    notes:          "Same logical workload; underlying platform refreshed to Dell. Backed up via PowerProtect + Cyber Recovery Vault.",
-    mappedAssetIds: [D_R770_MAIN_ID, D_R770_DR_ID, D_POWERSTORE_ID, D_PPDM_ID, D_PPCR_VAULT_ID]
-  });
-  const desPACS = createEmptyInstance({
-    ...cc(D_PACS_ID),
-    state:          "desired",
-    layerId:        "workload",
-    environmentId:  ENV_MAIN_ID,
-    label:          "Imaging / PACS — modernized",
-    vendor:         "Sectra / custom integration",
-    vendorGroup:    "custom",
-    criticality:    "High",
-    priority:       "Now",
-    disposition:    "keep",
-    originId:       I_PACS_ID,
-    notes:          "Same logical PACS workload; PowerEdge R770 + PowerScale F210 underneath. Feeds Radiology AI inference.",
-    mappedAssetIds: [D_R770_MAIN_ID, D_POWERSCALE_ID, D_PPDM_ID]
-  });
-  const desAnalytics = createEmptyInstance({
-    ...cc(D_ANALYTICS_ID),
-    state:          "desired",
-    layerId:        "workload",
-    environmentId:  ENV_MAIN_ID,
-    label:          "Clinical Analytics — modernized",
-    vendor:         "Custom (Spark + ML pipelines)",
-    vendorGroup:    "custom",
-    criticality:    "Medium",
-    priority:       "Next",
-    disposition:    "enhance",
-    originId:       I_ANALYTICS_ID,
-    notes:          "Pure → PowerScale F210 + GCP burst extracts. CloudIQ-monitored for cost.",
-    mappedAssetIds: [D_R770_MAIN_ID, D_POWERSCALE_ID]
-  });
-  const desPatientPortal = createEmptyInstance({
-    ...cc(D_PATIENT_PORTAL_ID),
-    state:          "desired",
-    layerId:        "workload",
-    environmentId:  ENV_BRANCH_ID,
-    label:          "Patient Portal — consolidated",
-    vendor:         "Custom (web + native)",
-    vendorGroup:    "custom",
-    criticality:    "Medium",
-    priority:       "Later",
-    disposition:    "consolidate",
-    originId:       I_PATIENT_PORTAL_ID,
-    notes:          "Branch local + GCP. Single VxRail node replaces the Lenovo footprint. APEX Backup for cloud-side DR.",
-    mappedAssetIds: [D_VXRAIL_ID, D_APEX_BACKUP_ID]
-  });
-  const desRadAI = createEmptyInstance({
-    ...cc(D_RAD_AI_ID),
-    state:          "desired",
-    layerId:        "workload",
-    environmentId:  ENV_MAIN_ID,
-    label:          "Radiology AI — net-new",
-    vendor:         "Custom (CV inference + fine-tune)",
-    vendorGroup:    "custom",
-    criticality:    "Medium",
-    priority:       "Next",
-    disposition:    "introduce",
-    originId:       I_RAD_AI_ID,
-    notes:          "Net-new clinical AI. Inference on PowerEdge XE9680, training data on PowerScale F210, CloudIQ ops.",
-    mappedAssetIds: [D_XE9680_ID, D_POWERSCALE_ID]
-  });
-
-  // ─── Gaps (8) ────────────────────────────────────────────────────
-  // 7 origin="autoDraft" + 1 origin="manual" (the HIPAA tabletop ops gap).
-  // 6 reviewed:true (polished demo) + 2 reviewed:false (showcase the
-  // review workflow): GAP_RAD_AI_ID + GAP_BRANCH_CONSOL_ID.
-  const gapEhrReplace = createEmptyGap({
-    ...cc(GAP_EHR_REPLACE_ID),
-    description:               "Replace EHR compute with PowerEdge R770 (Main DC + DR)",
+  // ─── Gaps (9) ──────────────────────────────────────────────────────
+  const gapConsolidateHci = createEmptyGap({
+    ...cc(GAP_CONSOLIDATE_HCI_ID),
+    description:               "Consolidate Site 1 + Site 2 compute/virtualization onto Dell Private Cloud (PowerFlex)",
     layerId:                   "compute",
-    affectedLayers:            ["compute"],
-    affectedEnvironments:      [ENV_MAIN_ID, ENV_DR_ID],
-    gapType:                   "replace",
+    affectedLayers:            ["compute", "virtualization"],
+    affectedEnvironments:      [ENV_SITE1_ID, ENV_SITE2_ID],
+    gapType:                   "consolidate",
     urgency:                   "High",
-    urgencyOverride:           false,
     phase:                     "now",
     status:                    "open",
     reviewed:                  true,
     origin:                    "autoDraft",
-    notes:                     "HPE DL380 fleet hits end-of-life Q1 2027. Replace with PowerEdge R770 Main DC + DR pair. Standardizes hardware platform; iDRAC + CloudIQ telemetry from day one.",
+    notes:                     "Both sites run Dell servers, Nutanix NX servers, VMware vSphere, and Nutanix AHV side by side. Consolidating onto Dell Private Cloud (Dell Automation Platform + PowerFlex) standardizes the platform and makes DR failover a like-for-like swap instead of a cross-vendor exercise.",
     driverId:                  DRIVER_MODERNIZE_ID,
-    relatedCurrentInstanceIds: [I_HPE_MAIN_ID, I_HPE_DR_ID],
-    relatedDesiredInstanceIds: [D_R770_MAIN_ID, D_R770_DR_ID],
-    services:                  ["assessment", "deployment", "knowledge_transfer"]
+    relatedCurrentInstanceIds: [I_NX_S1_ID, I_VSPHERE_S1_ID, I_AHV_S1_ID, I_VSAN_S1_ID, I_NX_S2_ID, I_VSPHERE_S2_ID, I_AHV_S2_ID, I_VSAN_S2_ID],
+    relatedDesiredInstanceIds: [D_PRIVATECLOUD_S1_ID, D_PRIVATECLOUD_S2_ID],
+    services:                  ["assessment", "migration", "deployment", "decommissioning"]
   });
 
   const gapStorageReplace = createEmptyGap({
     ...cc(GAP_STORAGE_REPLACE_ID),
-    description:               "Replace tier-1 storage with PowerStore 1200T (EHR + PACS)",
+    description:               "Replace Pure Storage Object with PowerScale (Site 1)",
     layerId:                   "storage",
     affectedLayers:            ["storage"],
-    affectedEnvironments:      [ENV_MAIN_ID, ENV_DR_ID],
+    affectedEnvironments:      [ENV_SITE1_ID],
     gapType:                   "replace",
-    urgency:                   "High",
-    urgencyOverride:           false,
-    phase:                     "now",
+    urgency:                   "Medium",
+    phase:                     "next",
     status:                    "open",
     reviewed:                  true,
     origin:                    "autoDraft",
-    notes:                     "NetApp AFF A400 (Main) + A220 (DR) both end-of-support 2027. PowerStore 1200T pair gives native dedup + Epic AppSync + protocol consistency.",
+    notes:                     "Pure Storage Object is a standalone single-vendor tier with EOL approaching. PowerScale absorbs it into the same unified storage tier the Dell Private Cloud consolidation is already building toward.",
     driverId:                  DRIVER_MODERNIZE_ID,
-    relatedCurrentInstanceIds: [I_NETAPP_MAIN_ID, I_NETAPP_DR_ID],
-    relatedDesiredInstanceIds: [D_POWERSTORE_ID],
-    services:                  ["migration", "deployment", "integration"]
+    relatedCurrentInstanceIds: [I_PURE_S1_ID],
+    relatedDesiredInstanceIds: [D_POWERSCALE_S1_ID],
+    services:                  ["migration", "deployment"]
   });
 
-  const gapCyberReplace = createEmptyGap({
-    ...cc(GAP_CYBER_REPLACE_ID),
-    description:               "Replace Veeam with PowerProtect + Cyber Recovery Vault",
+  const gapBackupReplace = createEmptyGap({
+    ...cc(GAP_BACKUP_REPLACE_ID),
+    description:               "Replace Veeam with PowerProtect Data Manager (Site 1 + Site 2)",
     layerId:                   "dataProtection",
     affectedLayers:            ["dataProtection"],
-    affectedEnvironments:      [ENV_MAIN_ID, ENV_DR_ID],
+    affectedEnvironments:      [ENV_SITE1_ID, ENV_SITE2_ID],
     gapType:                   "replace",
     urgency:                   "High",
-    urgencyOverride:           false,
     phase:                     "now",
     status:                    "open",
     reviewed:                  true,
     origin:                    "autoDraft",
-    notes:                     "Veeam + tape can't survive a HIPAA-grade ransomware event — no immutable copy, manual rotation. PowerProtect DD9410 (Main) + Cyber Recovery Vault (DR) gives air-gapped isolated copy with quarterly tested-restore drill.",
+    notes:                     "Discovery notes flagged the Veeam backup policy as \"TBC\" at both sites. PowerProtect Data Manager gives a documented, policy-driven backup platform integrated with the existing Data Domain appliances at both sites.",
     driverId:                  DRIVER_CYBER_ID,
-    relatedCurrentInstanceIds: [I_VEEAM_ID],
-    relatedDesiredInstanceIds: [D_PPDM_ID, D_PPCR_VAULT_ID],
-    services:                  ["assessment", "deployment", "runbook", "managed"],
+    relatedCurrentInstanceIds: [I_VEEAM_S1_ID, I_VEEAM_S2_ID],
+    relatedDesiredInstanceIds: [D_PPDM_S1_ID, D_PPDM_S2_ID],
+    services:                  ["assessment", "migration", "deployment", "runbook"],
     aiMappedDellSolutions:     {
       value: {
-        rawLegacy: "PowerProtect DD9410 + Cyber Recovery Vault",
-        products:  ["PowerProtect DD9410", "PowerProtect Cyber Recovery"]
+        rawLegacy: "PowerProtect Data Manager + PowerProtect DD",
+        products:  ["PowerProtect Data Manager", "PowerProtect DD"]
       },
       provenance: {
         model:            "claude-3-5-sonnet",
         promptVersion:    "skill:dellMap@1.4.0",
         skillId:          "demo-seed-dell-mapping",
-        runId:            "demo-cyber-replace-001",
+        runId:            "demo-mhda-backup-replace-001",
         timestamp:        TS,
         catalogVersions:  { "DELL_PRODUCT_TAXONOMY": "2026.04" },
         validationStatus: "valid"
@@ -821,153 +790,226 @@ function buildDemoEngagement() {
     }
   });
 
-  const gapPowerScale = createEmptyGap({
-    ...cc(GAP_POWERSCALE_ID),
-    description:               "Replace Pure Storage with PowerScale F210 (Analytics + AI)",
-    layerId:                   "storage",
-    affectedLayers:            ["storage"],
-    affectedEnvironments:      [ENV_MAIN_ID],
-    gapType:                   "replace",
-    urgency:                   "Medium",
-    urgencyOverride:           false,
+  const gapCyberVault = createEmptyGap({
+    ...cc(GAP_CYBER_VAULT_ID),
+    description:               "Introduce a Cyber Recovery vault on the existing Data Domain + CRS replication",
+    layerId:                   "dataProtection",
+    affectedLayers:            ["dataProtection"],
+    affectedEnvironments:      [ENV_SITE2_ID],
+    gapType:                   "introduce",
+    urgency:                   "High",
+    phase:                     "now",
+    status:                    "open",
+    reviewed:                  true,
+    origin:                    "autoDraft",
+    notes:                     "Site 1 Data Domain already replicates to a CRS DD target at Site 2 -- the foundation for an air-gapped vault is already in place. Introducing PowerProtect Cyber Recovery closes the ransomware-isolation gap that Veeam + DD alone don't cover.",
+    driverId:                  DRIVER_CYBER_ID,
+    relatedCurrentInstanceIds: [I_DDCRS_S2_ID],
+    relatedDesiredInstanceIds: [D_PPCRVAULT_S2_ID],
+    services:                  ["deployment", "runbook", "managed"]
+  });
+
+  const gapExchangeRetire = createEmptyGap({
+    ...cc(GAP_EXCHANGE_RETIRE_ID),
+    description:               "Retire on-prem Exchange; complete the Microsoft 365 migration",
+    layerId:                   "workload",
+    affectedLayers:            ["workload"],
+    affectedEnvironments:      [ENV_SITE1_ID, ENV_AZURE_ID],
+    gapType:                   "ops",
+    urgency:                   "High",
     phase:                     "next",
     status:                    "open",
     reviewed:                  true,
     origin:                    "autoDraft",
-    notes:                     "Pure FlashArray hits a budget renewal next FY. PowerScale F210 absorbs Analytics + Radiology AI training data in a single namespace; scale-out to 4 years of imaging growth.",
-    driverId:                  DRIVER_AI_ID,
-    relatedCurrentInstanceIds: [I_PURE_ID],
-    relatedDesiredInstanceIds: [D_POWERSCALE_ID],
-    services:                  ["migration", "deployment"]
+    notes:                     "GIS has a documented DR copy at Site 2; on-prem Exchange -- equally business-critical -- does not. The M365 / Outlook SaaS tenant already running in Azure is the resilience path: complete the migration, then decommission the on-prem Exchange box.",
+    driverId:                  DRIVER_CYBER_ID,
+    relatedCurrentInstanceIds: [I_EXCHANGE_S1_ID, I_M365_AZURE_ID],
+    relatedDesiredInstanceIds: [],
+    services:                  ["migration", "decommissioning", "runbook"]
   });
 
-  const gapRadAI = createEmptyGap({
-    ...cc(GAP_RAD_AI_ID),
-    description:               "Introduce Radiology AI inference on PowerEdge XE9680",
+  // gapType="ops" + reviewed=false — the NC2-on-Azure platform decision is
+  // a live discovery question, not yet validated with the customer; left
+  // unreviewed to showcase the review workflow.
+  const gapNc2Decision = createEmptyGap({
+    ...cc(GAP_NC2_DECISION_ID),
+    description:               "Decide the hybrid cloud platform before the NC2 landing zone takes workloads",
     layerId:                   "compute",
-    affectedLayers:            ["compute", "workload"],
-    affectedEnvironments:      [ENV_MAIN_ID],
-    gapType:                   "introduce",
+    affectedLayers:            ["compute", "virtualization"],
+    affectedEnvironments:      [ENV_AZURE_ID],
+    gapType:                   "ops",
     urgency:                   "Medium",
-    urgencyOverride:           false,
     phase:                     "next",
     status:                    "open",
     reviewed:                  false,
     origin:                    "autoDraft",
-    notes:                     "Net-new clinical AI. PowerEdge XE9680 (8x H100) + PowerScale F210 for training data. Aim: 30% radiologist read-time reduction. Pilot scope: 3 CV models on chest CT.",
-    driverId:                  DRIVER_AI_ID,
-    relatedCurrentInstanceIds: [],
-    relatedDesiredInstanceIds: [D_XE9680_ID, D_RAD_AI_ID],
-    services:                  ["assessment", "deployment", "custom_dev"]
+    notes:                     "The Azure NC2 landing zone has 4 nodes and zero workloads -- the cheapest point to decide whether to standardize on Dell APEX Cloud Services or keep extending Nutanix licensing into the cloud. Once a workload lands, the choice gets expensive to reverse.",
+    driverId:                  DRIVER_CLOUD_ID,
+    relatedCurrentInstanceIds: [I_NC2_AZURE_ID, I_AHV_NC2_AZURE_ID],
+    relatedDesiredInstanceIds: [D_APEXCLOUD_AZURE_ID],
+    services:                  ["assessment"]
   });
 
-  const gapBranchConsol = createEmptyGap({
-    ...cc(GAP_BRANCH_CONSOL_ID),
-    description:               "Consolidate Branch Clinic to VxRail VD-4000",
-    layerId:                   "compute",
-    affectedLayers:            ["compute", "virtualization", "storage"],
-    affectedEnvironments:      [ENV_BRANCH_ID],
-    gapType:                   "consolidate",
-    urgency:                   "Low",
-    urgencyOverride:           false,
+  // gapType="introduce" + reviewed=false — forward-looking ops tooling,
+  // not yet validated with the customer; showcases the review workflow.
+  const gapCloudIq = createEmptyGap({
+    ...cc(GAP_CLOUDIQ_ID),
+    description:               "Introduce CloudIQ + Dell APEX AIOps for unified infrastructure ops",
+    layerId:                   "infrastructure",
+    affectedLayers:            ["infrastructure"],
+    affectedEnvironments:      [ENV_SITE1_ID, ENV_SITE2_ID],
+    gapType:                   "introduce",
+    urgency:                   "Medium",
     phase:                     "later",
     status:                    "open",
     reviewed:                  false,
     origin:                    "autoDraft",
-    notes:                     "Lenovo + local virt + local storage at the Branch Clinic into a single 1U VxRail VD-4000 node. Simpler ops, lower power footprint, single Dell support contract.",
-    driverId:                  DRIVER_COST_ID,
-    relatedCurrentInstanceIds: [I_LENOVO_BRANCH_ID],
-    relatedDesiredInstanceIds: [D_VXRAIL_ID],
-    services:                  ["deployment", "decommissioning", "managed"]
-  });
-
-  const gapGcpDr = createEmptyGap({
-    ...cc(GAP_GCP_DR_ID),
-    description:               "Introduce APEX Backup Services for GCP DR egress",
-    layerId:                   "dataProtection",
-    affectedLayers:            ["dataProtection"],
-    affectedEnvironments:      [ENV_GCP_ID],
-    gapType:                   "introduce",
-    urgency:                   "Medium",
-    urgencyOverride:           false,
-    phase:                     "next",
-    status:                    "open",
-    reviewed:                  true,
-    origin:                    "autoDraft",
-    notes:                     "Patient Portal GCP workloads have no DR target today. APEX Backup Services gives a Dell-managed backup target outside the GCP blast radius.",
-    driverId:                  DRIVER_CYBER_ID,
+    notes:                     "Today's estate spans ManageEngine NCM, ManageEngine SAM, ITSM Remedy, Qualiex, Splunk, F5, and separate Nutanix/VMware/Pure consoles. Once compute/storage consolidates onto Dell, CloudIQ + APEX AIOps gives one telemetry pane without displacing Splunk as the SOC/SIEM system of record.",
+    driverId:                  DRIVER_OPS_ID,
     relatedCurrentInstanceIds: [],
-    relatedDesiredInstanceIds: [D_APEX_BACKUP_ID],
-    services:                  ["assessment", "deployment", "runbook"]
+    relatedDesiredInstanceIds: [D_CLOUDIQ_S1_ID],
+    services:                  ["deployment", "training"]
   });
 
-  // gapType="enhance" — Clinical Analytics workload upgrade (in-place
-  // capability boost, not a wholesale platform replacement). Enables
-  // the AI/data driver narrative without forcing a Replace framing.
-  // Pairs with gapPowerScale (storage replace) at the asset layer.
-  const gapAnalyticsEnhance = createEmptyGap({
-    ...cc(GAP_ANALYTICS_ENHANCE_ID),
-    description:               "Enhance Clinical Analytics with PowerScale F210 + GCP burst extracts",
+  // origin="manual" — the GIS DR-drill is a process gap the user authored
+  // directly via the "+ Add gap" dialog (no underlying desired-state
+  // disposition). Demos how manual-add gaps appear in the kanban WITHOUT
+  // being mis-flagged as auto-drafted.
+  const gapGisDrDrill = createEmptyGap({
+    ...cc(GAP_GIS_DR_DRILL_ID),
+    description:               "Validate GIS Site 1 -> Site 2 DR failover quarterly",
     layerId:                   "workload",
-    affectedLayers:            ["workload", "storage"],
-    affectedEnvironments:      [ENV_MAIN_ID, ENV_GCP_ID],
-    gapType:                   "enhance",
-    urgency:                   "Medium",
-    urgencyOverride:           false,
-    phase:                     "next",
-    status:                    "open",
-    reviewed:                  true,
-    origin:                    "autoDraft",
-    notes:                     "Same logical Analytics workload, upgraded data tier (PowerScale F210) + GCP burst for peak-load extracts. Enables 4-year imaging-growth headroom without re-platforming.",
-    driverId:                  DRIVER_AI_ID,
-    relatedCurrentInstanceIds: [I_ANALYTICS_ID],
-    relatedDesiredInstanceIds: [D_ANALYTICS_ID],
-    services:                  ["assessment", "migration", "knowledge_transfer"]
-  });
-
-  // origin="manual" — the HIPAA tabletop drill is a process gap the
-  // user authored directly via the +Add gap dialog (no underlying
-  // desired-state disposition). Demos how manual-add gaps appear
-  // in the kanban WITHOUT being mis-flagged as auto-drafted.
-  const gapHipaaDrill = createEmptyGap({
-    ...cc(GAP_HIPAA_DRILL_ID),
-    description:               "Conduct HIPAA tabletop + cyber-recovery validation drill",
-    layerId:                   "dataProtection",
-    affectedLayers:            ["dataProtection"],
-    affectedEnvironments:      [ENV_MAIN_ID, ENV_DR_ID],
+    affectedLayers:            ["workload"],
+    affectedEnvironments:      [ENV_SITE1_ID, ENV_SITE2_ID],
     gapType:                   "ops",
-    urgency:                   "High",
-    urgencyOverride:           false,
+    urgency:                   "Medium",
     phase:                     "now",
     status:                    "open",
     reviewed:                  true,
     origin:                    "manual",
-    notes:                     "Quarterly HIPAA tabletop: simulate a clinical-system ransomware event, validate Cyber Recovery Vault restore against the EHR + PACS, document evidence for the board. Process work paired with the Cyber Recovery Vault deployment — links it for traceability so the kanban shows which asset the drill exercises.",
+    notes:                     "GIS is the one workload discovery confirmed has a DR copy at Site 2. A quarterly tested failover drill turns that into a proven recovery capability rather than an assumed one, and gives the board evidence ahead of the broader backup/cyber-recovery rollout.",
     driverId:                  DRIVER_CYBER_ID,
-    relatedCurrentInstanceIds: [],
-    relatedDesiredInstanceIds: [D_PPCR_VAULT_ID],
-    services:                  ["runbook", "training", "managed"]
+    relatedCurrentInstanceIds: [I_GIS_S1_ID, I_GIS_S2_ID],
+    relatedDesiredInstanceIds: [],
+    services:                  ["runbook", "training"]
+  });
+
+  const gapGisEnhance = createEmptyGap({
+    ...cc(GAP_GIS_ENHANCE_ID),
+    description:               "Enhance GIS Platform with the modernized Dell infrastructure chain",
+    layerId:                   "workload",
+    affectedLayers:            ["workload", "compute", "storage", "dataProtection"],
+    affectedEnvironments:      [ENV_SITE1_ID, ENV_SITE2_ID],
+    gapType:                   "enhance",
+    urgency:                   "Medium",
+    phase:                     "next",
+    status:                    "open",
+    reviewed:                  true,
+    origin:                    "autoDraft",
+    notes:                     "Same logical GIS workload, upgraded underneath: Dell Private Cloud + PowerScale for compute/storage, PowerProtect Data Manager + Cyber Recovery vault for backup. No re-platforming of the GIS application itself.",
+    driverId:                  DRIVER_MODERNIZE_ID,
+    relatedCurrentInstanceIds: [I_GIS_S1_ID],
+    relatedDesiredInstanceIds: [D_GIS_S1_ID],
+    services:                  ["assessment", "migration", "knowledge_transfer"]
   });
 
   // ─── Assemble byId / allIds + byState collections ────────────────
-  const driversAllIds = [DRIVER_CYBER_ID, DRIVER_MODERNIZE_ID, DRIVER_AI_ID, DRIVER_COST_ID];
-  const envsAllIds    = [ENV_MAIN_ID, ENV_DR_ID, ENV_BRANCH_ID, ENV_GCP_ID];
+  const driversAllIds = [DRIVER_MODERNIZE_ID, DRIVER_CYBER_ID, DRIVER_CLOUD_ID, DRIVER_OPS_ID];
+  const envsAllIds    = [ENV_SITE1_ID, ENV_SITE2_ID, ENV_AZURE_ID];
 
   const allCurrent = [
-    instEHR, instPACS, instAnalytics, instPatientPortal, instRadAI,
-    instHpeMain, instHpeDR, instCiscoUCS, instLenovoBranch,
-    instNetAppMain, instNetAppDR, instPure,
-    instGcePortal, instGcsPortal,
-    instVeeam,
-    instVsphereMain, instVsphereDR,
-    instCiscoNet
+    instDellS1, instNxS1, instNxS2, instDellS2, instNc2Azure,
+    instVsphereS1, instAhvS1, instVsanS1, instVsphereS2, instAhvS2, instVsanS2, instAhvNc2Azure,
+    instNutVmS1, instNutObjS1, instPureS1, instFileshareS1, instNutVmS2, instNutObjS2,
+    instDdS1, instVeeamS1, instOpentextS1, instDdcrsS2, instVeeamS2, instOpentextS2,
+    instCiscoNetS1, instDellTorS1, instPaloAltoS1, instFortinetS1, instCiscoIseS1, instAdS1,
+    instRiverbedS1, instMencmS1, instF5S1, instSplunkS1, instItsmS1, instMesamS1,
+    instCiscoNetS2, instDellTorS2, instPaloAltoS2, instFortinetS2, instAdS2, instInfobloxS2,
+    instQualiexS2, instSplunkS2, instItsmS2, instMesamS2, instVpnGwAzure,
+    instGisS1, instExchangeS1, instWebappsS1, instAppinS1, instVdigpuS2, instGisS2, instM365Azure
   ];
+
+  // ─── Demo lifecycle population (all current hardware/platform assets) ──
+  //
+  // Every current-state infrastructure asset is given deterministic
+  // end-of-sale / end-of-support / end-of-service-life dates so the Tech
+  // Refresh report has a clean, compelling story. Dates are anchored to a
+  // near-2026 window and authored as a realistic mixed-risk spread that
+  // computeLifecycleRisk() (services/healthMetrics.js) buckets as:
+  //   critical  — past end-of-service-life
+  //   high      — past end-of-support
+  //   elevated  — end-of-support within the next 180 days
+  //   healthy   — years of support remaining (no flag)
+  // The aging/expired assets are biased toward the legacy
+  // Nutanix / VMware / Pure platforms the modernization narrative already
+  // wants to collapse, so lifecycle risk reinforces the gap story.
+  //
+  // [endOfSaleDate, endOfSupportDate, endOfServiceLifeDate]
+  const LC = {
+    critA:   ["2019-06-30", "2023-06-30", "2025-03-31"],
+    critB:   ["2020-12-31", "2023-12-31", "2025-09-30"],
+    highA:   ["2021-09-30", "2025-03-31", "2027-06-30"],
+    highB:   ["2022-06-30", "2025-12-31", "2027-12-31"],
+    elevA:   ["2023-06-30", "2026-10-31", "2028-10-31"],
+    elevB:   ["2023-12-31", "2026-12-15", "2028-12-31"],
+    okA:     ["2026-03-31", "2029-12-31", "2031-12-31"],
+    okB:     ["2027-06-30", "2030-06-30", "2032-06-30"]
+  };
+  const LIFECYCLE_BY_ID = {
+    // Compute
+    [I_DELL_S1_ID]: LC.elevA, [I_NX_S1_ID]: LC.critA, [I_NX_S2_ID]: LC.critB,
+    [I_DELL_S2_ID]: LC.elevB, [I_NC2_AZURE_ID]: LC.okA,
+    // Virtualization
+    [I_VSPHERE_S1_ID]: LC.critA, [I_AHV_S1_ID]: LC.highA, [I_VSAN_S1_ID]: LC.critB,
+    [I_VSPHERE_S2_ID]: LC.critB, [I_AHV_S2_ID]: LC.highB, [I_VSAN_S2_ID]: LC.critA,
+    [I_AHV_NC2_AZURE_ID]: LC.okB,
+    // Storage
+    [I_NUTVM_S1_ID]: LC.highA, [I_NUTOBJ_S1_ID]: LC.highB, [I_PURE_S1_ID]: LC.highA,
+    [I_FILESHARE_S1_ID]: LC.elevA, [I_NUTVM_S2_ID]: LC.highB, [I_NUTOBJ_S2_ID]: LC.elevB,
+    // Data Protection
+    [I_DD_S1_ID]: LC.okA, [I_VEEAM_S1_ID]: LC.highA, [I_OPENTEXT_S1_ID]: LC.elevA,
+    [I_DDCRS_S2_ID]: LC.okB, [I_VEEAM_S2_ID]: LC.highB, [I_OPENTEXT_S2_ID]: LC.elevB,
+    // Infrastructure
+    [I_CISCONET_S1_ID]: LC.elevA, [I_DELLTOR_S1_ID]: LC.okA, [I_PALOALTO_S1_ID]: LC.elevB,
+    [I_FORTINET_S1_ID]: LC.highA, [I_CISCOISE_S1_ID]: LC.highB, [I_AD_S1_ID]: LC.okA,
+    [I_RIVERBED_S1_ID]: LC.critA, [I_MENCM_S1_ID]: LC.elevA, [I_F5_S1_ID]: LC.elevB,
+    [I_SPLUNK_S1_ID]: LC.okB, [I_ITSM_S1_ID]: LC.elevA, [I_MESAM_S1_ID]: LC.okA,
+    [I_CISCONET_S2_ID]: LC.elevB, [I_DELLTOR_S2_ID]: LC.okB, [I_PALOALTO_S2_ID]: LC.elevA,
+    [I_FORTINET_S2_ID]: LC.highB, [I_AD_S2_ID]: LC.okB, [I_INFOBLOX_S2_ID]: LC.elevA,
+    [I_QUALIEX_S2_ID]: LC.okA, [I_SPLUNK_S2_ID]: LC.okB, [I_ITSM_S2_ID]: LC.elevB,
+    [I_MESAM_S2_ID]: LC.okA, [I_VPNGW_AZURE_ID]: LC.okB
+  };
+  allCurrent.forEach(function(inst) {
+    const lc = LIFECYCLE_BY_ID[inst.id];
+    if (!lc) return;  // workloads / SaaS apps carry no hardware lifecycle dates
+    inst.endOfSaleDate        = lc[0];
+    inst.endOfSupportDate     = lc[1];
+    inst.endOfServiceLifeDate = lc[2];
+  });
+
+  // ─── Demo asset mapping (every current workload → the assets it uses) ──
+  //
+  // mappedAssetIds is schema-restricted to workload-layer instances. These
+  // links let the Architecture Diagram prompt describe real workload→asset
+  // dependencies across the layer stack.
+  const WORKLOAD_MAPPING = {
+    [I_GIS_S1_ID]:      [I_DELL_S1_ID, I_VSPHERE_S1_ID, I_NUTVM_S1_ID, I_DD_S1_ID, I_VEEAM_S1_ID],
+    [I_EXCHANGE_S1_ID]: [I_DELL_S1_ID, I_VSPHERE_S1_ID, I_NUTVM_S1_ID, I_DD_S1_ID],
+    [I_WEBAPPS_S1_ID]:  [I_NX_S1_ID, I_VSPHERE_S1_ID, I_NUTVM_S1_ID, I_PURE_S1_ID],
+    [I_APPIN_S1_ID]:    [I_NX_S1_ID, I_AHV_S1_ID, I_NUTOBJ_S1_ID],
+    [I_VDIGPU_S2_ID]:   [I_NX_S2_ID, I_AHV_S2_ID, I_NUTVM_S2_ID],
+    [I_GIS_S2_ID]:      [I_DELL_S2_ID, I_VSPHERE_S2_ID, I_NUTVM_S2_ID, I_DDCRS_S2_ID, I_VEEAM_S2_ID],
+    [I_M365_AZURE_ID]:  [I_NC2_AZURE_ID, I_AHV_NC2_AZURE_ID, I_VPNGW_AZURE_ID]
+  };
+  allCurrent.forEach(function(inst) {
+    const map = WORKLOAD_MAPPING[inst.id];
+    if (map) inst.mappedAssetIds = map;
+  });
+
   const allDesired = [
-    desEHR, desPACS, desAnalytics, desPatientPortal, desRadAI,
-    desR770Main, desR770DR, desXe9680, desVxrail,
-    desPowerStore, desPowerScale,
-    desPpdm, desPpcrVault, desApexBackup,
-    desCloudIq
+    desPrivateCloudS1, desPrivateCloudS2, desPowerScaleS1,
+    desPpdmS1, desPpdmS2, desPpcrVaultS2,
+    desApexCloudAzure, desCloudIqS1, desGisS1
   ];
   const allInst = allCurrent.concat(allDesired);
   const instAllIds = allInst.map(i => i.id);
@@ -975,11 +1017,8 @@ function buildDemoEngagement() {
   allInst.forEach(i => { instById[i.id] = i; });
 
   const gapsList = [
-    gapEhrReplace, gapStorageReplace, gapCyberReplace,
-    gapPowerScale, gapAnalyticsEnhance, gapRadAI,
-    gapBranchConsol,
-    gapGcpDr,
-    gapHipaaDrill
+    gapConsolidateHci, gapStorageReplace, gapBackupReplace, gapCyberVault,
+    gapExchangeRetire, gapNc2Decision, gapCloudIq, gapGisDrDrill, gapGisEnhance
   ];
   const gapsAllIds = gapsList.map(g => g.id);
   const gapsById = {};
@@ -990,19 +1029,18 @@ function buildDemoEngagement() {
     customer,
     drivers: {
       byId: {
-        [DRIVER_CYBER_ID]:     driverCyber,
         [DRIVER_MODERNIZE_ID]: driverModernize,
-        [DRIVER_AI_ID]:        driverAI,
-        [DRIVER_COST_ID]:      driverCost
+        [DRIVER_CYBER_ID]:     driverCyber,
+        [DRIVER_CLOUD_ID]:     driverCloud,
+        [DRIVER_OPS_ID]:       driverOps
       },
       allIds: driversAllIds
     },
     environments: {
       byId: {
-        [ENV_MAIN_ID]:   envMain,
-        [ENV_DR_ID]:     envDr,
-        [ENV_BRANCH_ID]: envBranch,
-        [ENV_GCP_ID]:    envGcp
+        [ENV_SITE1_ID]: envSite1,
+        [ENV_SITE2_ID]: envSite2,
+        [ENV_AZURE_ID]: envAzure
       },
       allIds: envsAllIds
     },

@@ -38,5 +38,7 @@ echo ""
   fi
 }) &
 
-# Run Python's built-in static file server
-python3 -m http.server 8000
+# Run the bundled static server (forces correct ES-module MIME types;
+# a bare `python3 -m http.server` can serve .js as text/plain on some
+# systems, which browsers reject for module scripts).
+python3 serve.py 8000

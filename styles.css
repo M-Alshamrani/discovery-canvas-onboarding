@@ -2054,6 +2054,55 @@ button { font-family: var(--font); cursor: pointer; border: none; border-radius:
 .vendor-table th { font-size: 10px; font-weight: 700; color: var(--text-3); background: var(--surface-2); text-transform: uppercase; letter-spacing: 0.04em; position: sticky; top: 0; }
 .vendor-table tr:hover td { background: var(--dell-blue-faint); }
 
+/* ── Vendor criticality band chart ──────────────────────────── */
+.vc-empty       { font-size: 12px; color: var(--text-3); padding: 12px 0; }
+.vc-coverage    { margin-top: 4px; font-style: italic; color: var(--text-3); }
+
+/* Three equal-height criticality bands (Critical top → Low bottom). */
+.vc-band-chart  { display: flex; flex-direction: column; height: 384px; margin-top: 6px; gap: 6px; }
+.vc-band        { flex: 1; display: flex; align-items: stretch; border-radius: var(--radius-sm); padding: 6px 8px; }
+.vc-band-high   { background: color-mix(in srgb, var(--crit-high)    7%, var(--surface)); }
+.vc-band-medium { background: color-mix(in srgb, var(--crit-medium)  8%, var(--surface)); }
+.vc-band-low    { background: color-mix(in srgb, var(--crit-low)     7%, var(--surface)); }
+
+.vc-band-axis   { width: 104px; flex-shrink: 0; display: flex; flex-direction: column; justify-content: center; gap: 1px; padding-right: 10px; }
+.vc-band-tick   { margin-bottom: 1px; }
+.vc-band-name   { font-size: 13px; font-weight: 700; color: var(--text-1); }
+.vc-band-count  { font-size: 10px; color: var(--text-3); }
+
+.vc-band-barwrap{ flex: 1; display: flex; align-items: center; }
+.vc-band-bar    { display: flex; width: 100%; height: 100%; border-radius: 6px; overflow: hidden; box-shadow: inset 0 0 0 1px rgba(0,0,0,0.04); }
+.vc-band-empty  { font-size: 11px; color: var(--text-3); font-style: italic; align-self: center; padding-left: 4px; }
+
+.vc-seg         { min-width: 2px; display: flex; align-items: center; justify-content: center; overflow: hidden; border-right: 1px solid rgba(255,255,255,0.7); transition: opacity 0.1s; }
+.vc-seg:last-child { border-right: none; }
+.vc-seg.is-clickable { cursor: pointer; }
+.vc-seg.is-clickable:hover { opacity: 0.85; }
+.vc-seg-label   { display: flex; flex-direction: column; align-items: center; line-height: 1.15; padding: 2px; text-align: center; }
+.vc-seg-name    { font-size: 11px; font-weight: 700; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-seg-count   { font-size: 10px; opacity: 0.9; }
+
+/* Vendor breakdown (right panel). */
+.vc-vendor-row  { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 6px; background: none; border: none; border-bottom: 1px solid var(--border); cursor: pointer; font-family: var(--font); text-align: left; }
+.vc-vendor-row:hover { background: var(--dell-blue-faint); }
+.vc-swatch      { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+.vc-vendor-mid  { flex: 1; min-width: 0; }
+.vc-vendor-name { font-size: 12px; font-weight: 600; color: var(--text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vc-vendor-breakdown { display: flex; gap: 8px; margin-top: 2px; }
+.vc-mini        { display: inline-flex; align-items: center; gap: 2px; font-size: 10px; color: var(--text-3); }
+.vc-mini-n      { font-weight: 600; }
+.vc-vendor-right{ text-align: right; flex-shrink: 0; }
+.vc-vendor-total{ font-size: 13px; font-weight: 700; color: var(--text-1); }
+.vc-vendor-pct  { font-size: 10px; color: var(--text-3); }
+.vc-vendor-head { display: flex; align-items: center; gap: 8px; }
+.vc-back-link   { background: none; border: none; color: var(--dell-blue); font-size: 11px; font-weight: 600; cursor: pointer; padding: 0 0 8px; font-family: var(--font); }
+
+.vc-inst-row    { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.vc-inst-row:last-child { border-bottom: none; }
+.vc-inst-label  { font-size: 12px; color: var(--text-1); display: flex; align-items: center; gap: 2px; }
+.vc-inst-meta   { font-size: 10px; color: var(--text-3); margin-left: 6px; }
+.vc-crit-select { font-size: 11px; padding: 2px 6px; flex-shrink: 0; }
+
 /* ── Context view ───────────────────────────────────────────── */
 .coaching-card { background: linear-gradient(135deg, #EFF8FF 0%, #E0F2FC 100%); border: 1px solid #BFDBF7; }
 .coaching-title { font-size: 12px; font-weight: 700; color: var(--dell-blue-deep); margin-bottom: 8px; }
@@ -4150,6 +4199,36 @@ button { font-family: var(--font); cursor: pointer; border: none; border-radius:
   font-size: 12px;
   color: var(--high);
   line-height: 1.5;
+}
+
+/* Export options — per-output cards + architecture prompt textarea */
+.er-option-card {
+  margin-top: 14px;
+}
+
+.er-option-card .er-section-list {
+  margin-top: 10px;
+}
+
+.er-arch-prompt {
+  width: 100%;
+  margin-top: 12px;
+  padding: 12px 14px;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-1);
+  background: var(--surface-2, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  resize: vertical;
+  box-sizing: border-box;
+}
+
+.er-arch-prompt:focus-visible {
+  outline: 2px solid var(--dell-blue-soft);
+  outline-offset: 1px;
+  border-color: var(--dell-blue);
 }
 
 /* ── Overlay (v2.4.13 S3 Overlay.js) ─────────────────────────────

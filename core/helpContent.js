@@ -82,6 +82,16 @@ export const HELP_CONTENT = {
     ]
   },
 
+  reporting_vendor_criticality: {
+    title: "Reporting — Vendor Criticality",
+    body: [
+      "Workload-centric: the unit is the current business workload, not the servers/storage under it. A server isn't a workload — it's a server running one. So the bands are workloads by THEIR criticality: Critical (top), Medium, Low (bottom).",
+      "Each band is split by the vendors exposed to those workloads. A vendor relates to a workload by being its application vendor, or by supplying technology the workload is mapped to (its compute/storage/backup/etc.). Map a workload's stack in Current State to surface that underlying vendor lock-in.",
+      "The 'Vendor exposure from' chips pick which sources count: 'Business app' = the workload's own vendor; the others = the mapped underlying layers. Vendors keep one colour across all bands; the long tail collapses into 'Other'.",
+      "The right panel ranks vendors by how many workloads they're exposed to. Click a vendor (or a chart segment) to list those workloads — each with its own Criticality dropdown that commits immediately and reflows the bands. Current state only."
+    ]
+  },
+
   reporting_roadmap: {
     title: "Reporting — Roadmap (the crown jewel)",
     body: [

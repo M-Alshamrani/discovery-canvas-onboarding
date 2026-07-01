@@ -35,8 +35,10 @@ echo.
 REM Open the default browser after a 2-second delay so the server is up
 start "" /b cmd /c "timeout /t 2 /nobreak >nul && start http://localhost:8000"
 
-REM Run Python's built-in static file server on port 8000
-python -m http.server 8000
+REM Run the bundled static server (forces correct ES-module MIME types;
+REM a bare "python -m http.server" can serve .js as text/plain on some
+REM systems, which browsers reject for module scripts).
+python serve.py 8000
 
 echo.
 echo  Server stopped.

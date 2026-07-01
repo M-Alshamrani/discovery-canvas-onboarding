@@ -26,6 +26,7 @@ import { renderReportingOverview }   from "./ui/views/ReportingView.js";
 import { renderSummaryHealthView }   from "./ui/views/SummaryHealthView.js";
 import { renderSummaryGapsView }     from "./ui/views/SummaryGapsView.js";
 import { renderSummaryVendorView }   from "./ui/views/SummaryVendorView.js";
+import { renderSummaryVendorCriticalityView } from "./ui/views/SummaryVendorCriticalityView.js";
 import { renderSummaryRoadmapView }  from "./ui/views/SummaryRoadmapView.js";
 import { renderExportReportView }    from "./ui/views/ExportReportView.js";
 
@@ -49,8 +50,9 @@ var REPORTING_TABS = [
   { id: "health",   label: "Heatmap"       },
   { id: "gaps",     label: "Gaps board"    },
   { id: "vendor",   label: "Vendor mix"    },
+  { id: "vendorCrit", label: "Vendor criticality" },
   { id: "roadmap",  label: "Roadmap"       },
-  { id: "export",   label: "Export report" }
+  { id: "export",   label: "Export options" }
 ];
 
 var currentStep         = "context";
@@ -597,6 +599,7 @@ function renderReportingTab(left, right) {
     case "health":   renderSummaryHealthView(left, right);  break;
     case "gaps":     renderSummaryGapsView(left, right);    break;
     case "vendor":   renderSummaryVendorView(left, right);  break;
+    case "vendorCrit": renderSummaryVendorCriticalityView(left, right); break;
     case "roadmap":  renderSummaryRoadmapView(left, right); break;
     case "export":   renderExportReportView(left, right);   break;
   }
@@ -642,7 +645,7 @@ function wireFooter() {
     demoBtn.addEventListener("click", function() {
       confirmAction({
         title: "Load demo session?",
-        body: "This replaces the current canvas with the Acme Healthcare / Riyadh + Jeddah + Sovereign Cloud demo. Anything you've typed is lost (use Save to file first if you want to keep it).",
+        body: "This replaces the current canvas with the Meridian Heritage Development Authority (MHDA) / Site 1 + Site 2 + Azure demo. Anything you've typed is lost (use Save to file first if you want to keep it).",
         confirmLabel: "Load demo",
         danger: true
       }).then(async function(yes) {
