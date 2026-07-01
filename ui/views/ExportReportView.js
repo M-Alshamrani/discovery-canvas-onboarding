@@ -476,6 +476,37 @@ function buildTechRefreshSummary(tr) {
     rptKpiCard(tr.trackedCoveragePct + "%", "Lifecycle Tracked", tr.tracked + " of " + tr.total + " assets", coverageCls(tr.trackedCoveragePct))
   ].join("");
 
+  // ── Lifecycle severity donut (every current asset carries a severity, so
+  //    the four segments sum to tr.total and the ring reads as a full circle) ──
+  var severityDonut = buildDonutSVG([
+    { count: s.critical, color: "#DC2626", label: "Past Service Life" },
+    { count: s.high,     color: "#EA580C", label: "Out of Support"    },
+    { count: s.elevated, color: "#D97706", label: "Support Expiring"  },
+    { count: s.none,     color: "#16A34A", label: "Within Support"    }
+  ], tr.total);
+
+  var donutLegend = [
+    sevLegendRow("#DC2626", "Past Service Life", s.critical, tr.total),
+    sevLegendRow("#EA580C", "Out of Support",    s.high,     tr.total),
+    sevLegendRow("#D97706", "Support Expiring",  s.elevated, tr.total),
+    sevLegendRow("#16A34A", "Within Support",    s.none,     tr.total)
+  ].join("");
+
+  // ── Refresh timeline: how the estate splits into now / soon / healthy ──
+  var nowN     = tr.refreshNow.length;
+  var soonN    = tr.refreshSoon.length;
+  var healthyN = Math.max(tr.total - nowN - soonN, 0);
+  var seg = function(count, color) {
+    if (count === 0) return "";
+    return "<div style=\"width:" + pct(count, tr.total) + "%;background:" + color + "\"></div>";
+  };
+  var timelineBar =
+    "<div style=\"display:flex;height:14px;border-radius:7px;overflow:hidden;background:var(--bg4)\">" +
+      seg(nowN, "#DC2626") + seg(soonN, "#D97706") + seg(healthyN, "#16A34A") +
+    "</div>";
+
+  var waveChart = buildColumnChart(refreshWaveBuckets(tr));
+
   return [
     "<div class=\"rpt-sh\">Lifecycle Summary</div>",
     "<div class=\"rpt-g5\">" + kpiGrid + "</div>",
@@ -486,8 +517,114 @@ function buildTechRefreshSummary(tr) {
             " need immediate refresh (out of support or past end of service life); " +
             tr.refreshSoon.length + " more " + (tr.refreshSoon.length === 1 ? "is" : "are") +
             " approaching end of support within the next 12 months."),
+    "</div>",
+
+    "<div class=\"rpt-sh\">Lifecycle Health Mix</div>",
+    "<div class=\"rpt-g2\">",
+
+      // Severity donut card
+      "<div class=\"rpt-card\">",
+        "<div class=\"rpt-ct\">Estate by Lifecycle Status</div>",
+        "<div class=\"rpt-dw\">",
+          "<div class=\"rpt-dc\">",
+            severityDonut,
+            "<div class=\"rpt-dh\"><div class=\"rpt-dv\">" + tr.total + "</div><div class=\"rpt-dl2\">Assets</div></div>",
+          "</div>",
+          "<div class=\"rpt-dl3\">" + donutLegend + "</div>",
+        "</div>",
+      "</div>",
+
+      // Refresh timeline card
+      "<div class=\"rpt-card\">",
+        "<div class=\"rpt-ct\">Refresh Timeline</div>",
+        timelineBar,
+        "<div style=\"display:flex;gap:16px;margin-top:14px\">",
+          tlStat("#DC2626", "Refresh Now",  nowN),
+          tlStat("#D97706", "Refresh Soon", soonN),
+          tlStat("#16A34A", "Healthy",      healthyN),
+        "</div>",
+        "<div class=\"rpt-ct\" style=\"margin-top:22px\">Refresh Waves by Year</div>",
+        waveChart,
+      "</div>",
+
     "</div>"
   ].join("\n");
+}
+
+// Severity legend row — mirrors the donut colours next to a count + share.
+function sevLegendRow(color, name, count, total) {
+  var p = total ? Math.round((count / total) * 100) : 0;
+  return "<div class=\"rpt-li\">" +
+    "<span class=\"rpt-ld\" style=\"background:" + color + "\"></span>" +
+    "<span class=\"rpt-ln\">" + esc(name) + "</span>" +
+    "<span class=\"rpt-lp\">" + count + "</span>" +
+    "<span class=\"rpt-lpct\">" + p + "%</span>" +
+  "</div>";
+}
+
+// Big-number stat used under the refresh-timeline bar.
+function tlStat(color, label, value) {
+  return "<div style=\"flex:1\">" +
+    "<div style=\"font-size:22px;font-weight:800;line-height:1;color:" + color + "\">" + value + "</div>" +
+    "<div style=\"font-size:11px;color:var(--tx3);margin-top:3px\">" + esc(label) + "</div>" +
+  "</div>";
+}
+
+// Group at-risk assets into refresh "waves" by the year their earliest
+// lifecycle boundary lands, so sales can see when demand clusters. Anything
+// already past its date rolls into "Overdue"; years beyond +3 roll into a
+// single "later" bucket.
+function refreshWaveBuckets(tr) {
+  var now     = tr.referenceDate || new Date();
+  var nowYear = now.getFullYear();
+  var order   = ["Overdue"];
+  var counts  = { Overdue: 0 };
+  var laterKey = (nowYear + 3) + "+";
+  for (var y = nowYear; y <= nowYear + 3; y++) { order.push(String(y)); counts[String(y)] = 0; }
+  order.push(laterKey); counts[laterKey] = 0;
+
+  tr.rows.forEach(function(r) {
+    if (r.severity === "none") return;
+    var ds = r.endOfSupportDate || r.endOfServiceLifeDate;
+    if (!ds) { counts.Overdue++; return; }
+    var d = new Date(ds + "T00:00:00");
+    if (d.getTime() < now.getTime()) { counts.Overdue++; return; }
+    var y = d.getFullYear();
+    if (y > nowYear + 3) counts[laterKey]++;
+    else counts[String(y)]++;
+  });
+
+  return order
+    .filter(function(k) { return counts[k] > 0; })
+    .map(function(k) {
+      return {
+        label: k,
+        value: counts[k],
+        color: k === "Overdue" ? "#DC2626" : (k === String(nowYear) ? "#EA580C" : "#0076CE")
+      };
+    });
+}
+
+// Compact vertical column chart (self-contained inline styles — no report CSS
+// dependency). bars: [{ label, value, color }].
+function buildColumnChart(bars) {
+  if (!bars || bars.length === 0) {
+    return "<div class=\"rpt-empty\">No upcoming refreshes.</div>";
+  }
+  var max = bars.reduce(function(m, b) { return Math.max(m, b.value); }, 1);
+  var cols = bars.map(function(b) {
+    var h = Math.max(Math.round((b.value / max) * 100), 4);
+    return [
+      "<div style=\"flex:1;display:flex;flex-direction:column;align-items:center;gap:6px\">",
+        "<div style=\"font-size:12px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--tx1)\">" + b.value + "</div>",
+        "<div style=\"width:100%;max-width:46px;height:110px;display:flex;align-items:flex-end\">",
+          "<div style=\"width:100%;height:" + h + "%;background:" + b.color + ";border-radius:5px 5px 0 0\"></div>",
+        "</div>",
+        "<div style=\"font-size:10px;color:var(--tx3);text-align:center;line-height:1.2\">" + esc(b.label) + "</div>",
+      "</div>"
+    ].join("");
+  }).join("");
+  return "<div style=\"display:flex;align-items:flex-end;gap:12px;padding:8px 0;min-height:160px\">" + cols + "</div>";
 }
 
 function buildTechRefreshRoadmap(tr) {
@@ -547,6 +684,35 @@ function buildTechRefreshBreakdown(tr) {
     ].join("");
   };
 
+  // ── Refresh demand by vendor: which vendors' gear is aging out. Bars are
+  //    scaled to the busiest vendor (absolute counts), so the biggest refresh
+  //    opportunities read at a glance. ──
+  var vendorAtRisk = {};
+  tr.rows.forEach(function(r) {
+    if (r.severity === "none") return;
+    var v = r.vendor || "—";
+    vendorAtRisk[v] = (vendorAtRisk[v] || 0) + 1;
+  });
+  var vendorRows = Object.keys(vendorAtRisk)
+    .map(function(k) { return { label: k, atRisk: vendorAtRisk[k] }; })
+    .sort(function(a, b) { return b.atRisk - a.atRisk; })
+    .slice(0, 8);
+  var vendorMax = vendorRows.reduce(function(m, v) { return Math.max(m, v.atRisk); }, 1);
+  var vendorBars = vendorRows.map(function(v) {
+    var p = Math.round((v.atRisk / vendorMax) * 100);
+    return [
+      "<div class=\"rpt-hbl-row\">",
+        "<div class=\"rpt-hbl-meta\">",
+          "<span class=\"rpt-hbl-name\">" + esc(v.label) + "</span>",
+          "<span class=\"rpt-hbl-ct\">" + v.atRisk + " asset" + (v.atRisk !== 1 ? "s" : "") + " at risk</span>",
+        "</div>",
+        "<div class=\"rpt-hbt\">",
+          "<div class=\"rpt-hbf\" style=\"width:" + p + "%;background:#EA580C\"></div>",
+        "</div>",
+      "</div>"
+    ].join("");
+  }).join("");
+
   return [
     "<div class=\"rpt-sh\">Aging by Layer &amp; Environment</div>",
     "<div class=\"rpt-g2\">",
@@ -558,6 +724,12 @@ function buildTechRefreshBreakdown(tr) {
         "<div class=\"rpt-ct\">Lifecycle Risk by Environment</div>",
         "<div class=\"rpt-hbl\">" + (tr.byEnvironment.map(barRow).join("") || "<div class=\"rpt-empty\">No data.</div>") + "</div>",
       "</div>",
+    "</div>",
+
+    "<div class=\"rpt-sh\">Refresh Demand by Vendor</div>",
+    "<div class=\"rpt-card\">",
+      "<div class=\"rpt-ct\">Assets at Lifecycle Risk by Vendor</div>",
+      "<div class=\"rpt-hbl\">" + (vendorBars || "<div class=\"rpt-empty\">No assets at lifecycle risk.</div>") + "</div>",
     "</div>"
   ].join("\n");
 }
