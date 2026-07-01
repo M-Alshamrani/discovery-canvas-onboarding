@@ -167,13 +167,6 @@ export function renderMatrixView(left, right, _legacySession, opts) {
   wrap.appendChild(grid);
   left.appendChild(wrap);
 
-  if (isCurrentState) {
-    refreshCountdownCells();
-    _currentStateCountdownTimer = setInterval(function() {
-      refreshCountdownCells();
-    }, 60000);
-  }
-
   // Restore the right-pane detail panel if a selection persisted across
   // the re-mount. If there's a persisted selectedInstId AND the instance
   // still exists in the live engagement (it may have been deleted mid-
@@ -338,10 +331,6 @@ export function renderMatrixView(left, right, _legacySession, opts) {
       var badge = mk("span", "disposition-badge badge-" + inst.disposition);
       badge.textContent = da ? da.label : inst.disposition;
       tile.appendChild(badge);
-    }
-    if (isCurrentState) {
-      var lifecycleSummary = buildLifecycleSummary(inst);
-      if (lifecycleSummary) tile.appendChild(lifecycleSummary);
     }
     if (stateFilter === "desired" && inst.priority && !inst.disposition) {
       var pb = mk("span", "priority-badge priority-" + inst.priority.toLowerCase());
@@ -1065,38 +1054,6 @@ export function renderMatrixView(left, right, _legacySession, opts) {
     container.appendChild(banner);
   }
 
-  function refreshCountdownCells() {
-    if (!isCurrentState) return;
-    activeEnvs.forEach(function(env) {
-      ["compute", "storage", "dataProtection"].forEach(function(layerId) {
-        refreshCell(layerId, env.uuid);
-      });
-    });
-  }
-
-  function buildLifecycleSummary(inst) {
-    var chips = [];
-    addLifecycleBadge(chips, "Sale", inst.endOfSaleDate, "endOfSaleDate");
-    addLifecycleBadge(chips, "Support", inst.endOfSupportDate, "endOfSupportDate");
-    addLifecycleBadge(chips, "Life", inst.endOfServiceLifeDate, "endOfServiceLifeDate");
-    if (inst.nodeCount !== null && inst.nodeCount !== undefined) {
-      chips.push(mkt("span", "tile-life-chip tile-life-chip-nodes", "Nodes " + inst.nodeCount));
-    }
-    if (!chips.length) return null;
-    var wrap = mk("div", "tile-life-summary");
-    chips.forEach(function(chip) { wrap.appendChild(chip); });
-    return wrap;
-  }
-
-  function addLifecycleBadge(chips, label, dateValue, prop) {
-    if (!dateValue) return;
-    var badge = mk("span", "tile-life-chip tile-life-chip-date");
-    badge.setAttribute("data-lifecycle-prop", prop);
-    badge.title = label + " date: " + dateValue;
-    badge.textContent = label + " " + formatCountdown(dateValue);
-    chips.push(badge);
-  }
-
   function buildOptionalDateField(labelText, prop, value) {
     var group = mk("div", "form-group lifecycle-field");
     group.appendChild(mkt("label", "form-label", labelText));
@@ -1167,14 +1124,6 @@ export function renderMatrixView(left, right, _legacySession, opts) {
     return group;
   }
 
-  function formatCountdown(dateValue) {
-    var target = new Date(dateValue + "T00:00:00");
-    if (isNaN(target.getTime())) return dateValue;
-    var diffDays = Math.round((target.getTime() - Date.now()) / 86400000);
-    if (diffDays === 0) return "today";
-    if (diffDays > 0) return diffDays + "d";
-    return "-" + Math.abs(diffDays) + "d";
-  }
 }
 
 // ---- Shared helpers (module scope) ----
